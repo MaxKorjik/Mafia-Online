@@ -20,7 +20,7 @@ class User(Base):
 
 
 class Messages(Base):
-    __tabelname__ = "message"
+    __tablename__ = "message"
 
     id = Column(Integer, primary_key=True, index=True)
     message = Column(Text)
