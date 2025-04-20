@@ -1,4 +1,5 @@
 from email import header
+from webbrowser import get
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, status, Depends
 from fastapi.security import OAuth2PasswordBearer
 import json
@@ -8,7 +9,7 @@ from typing import Dict, List
 from schemas import Token
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
-from auth import get_user_by_email
+from auth import authenticate_user
 from config import SECRET_KEY, ALGORITHM
 import random, string
 from game_models import GameRoom, Player
@@ -37,7 +38,7 @@ async def get_user_by_token(token: str, db: Session):
         email: str = payload.get("sub")
         if email is None:
             raise credentials_exception
-        user = get_user_by_email(db, email)
+        user = authenticate_user(db, email)
         return user
     except JWTError:
         raise credentials_exception
@@ -85,8 +86,9 @@ async def websocket_endpoint(websocket: WebSocket, room_id: int, db : Session = 
                     payload = message.get("payload", {})
                     
                     handler = message_handlers.get(msg_type)
+                    
                     if handler:
-                        await handler(websocket, payload)
+                        await handler(websocket=websocket, payload=payload, room_id=room_id, db=db)
                     else:
                         await websocket.send_json({
                             "type": "error",
@@ -105,7 +107,97 @@ async def websocket_endpoint(websocket: WebSocket, room_id: int, db : Session = 
             else:
                 room.remove_player(name=username)
         
-    
 @register_handler("chat")
-async def handle_chat(ws, payload):
-    pass 
+async def handle_chat(websocket, payload,room_id, db : Session = Depends(get_db)):
+    username = payload.get("username")
+    message = payload.get("message")
+
+    
+    room = active_rooms.get(room_id)
+    
+    if not room:
+        await websocket.send_json({
+            "type": "error",
+            "message": "Кімната не знайдена"
+        })
+        return
+
+    # Получаем Player по username
+    player = room.players.get(username)
+    if not player:
+        await websocket.send_json({
+            "type": "error",
+            "message": "Гравець не знайдений"
+        })
+        return
+
+
+    # Рассылаем в комнату
+    await room.broadcast(json.dumps({
+        "type": "chat",
+        "username": username,
+        "message": message
+    }))
+    
+    # Сохраняем в базу
+    new_message = Messages(
+        message=message,
+        user_id=player.id,
+        room_id=room.room_id
+    )
+    db.add(new_message)
+    db.commit()
+    
+    
+@register_handler("start_game")
+async def handler_name(websocket, payload, room_id, **kwargs):
+    # # должна назначить роли игроков, обозначить раунд...
+    # payload = {
+    #     "username" : str
+    # }
+    
+    room = active_rooms.get(room_id)
+    
+    if not room:
+        await websocket.send_json({
+            "type": "error",
+            "message": "Кімната не знайдена"
+        })
+        return
+    
+    username = payload["username"]
+    
+    if room.owner != username:
+        await websocket.send_json({
+            "type": "error",
+            "message": "Кімната не знайдена"
+        })
+        return
+
+    if len(room.players) < 6:
+        await websocket.send_json({
+            "type": "error",
+            "message": "Для початку гри потрібно щонайменше 6 гравців"
+        })
+        return
+    
+    if room.phase != "waiting":
+        await websocket.send_json({
+            "type": "error",
+            "message": "Гра вже розпочата"
+        })
+        return
+    
+    room.phase = "day"
+    room.assign_roles()
+    
+    for player in room.players.values():
+        await player.websocket.send_json({
+            "type": "role_assigned",
+            "role": player.role
+        })
+
+    await room.broadcast(json.dumps({
+        "type": "game_started",
+        "message": "Гру розпочато!"
+    }))
