@@ -1,16 +1,14 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, status, Depends
 import json
-from database import get_db
-from models import User, Messages, Room
-from typing import Dict, List
-from schemas import Token
+from app.database import get_db
+from app.models import Messages
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
-from auth import authenticate_user
+from app.auth import authenticate_user
 from app.config import SECRET_KEY, ALGORITHM
 import random, string
-from game_models import GameRoom, Player
-from room_storage import active_rooms
+from app.game_rooms.game_models import GameRoom, Player
+from app.game_rooms.room_storage import active_rooms
 import asyncio
 
 
