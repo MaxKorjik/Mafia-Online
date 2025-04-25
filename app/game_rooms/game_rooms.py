@@ -1,7 +1,4 @@
-from email import header
-from webbrowser import get
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, status, Depends
-from fastapi.security import OAuth2PasswordBearer
 import json
 from database import get_db
 from models import User, Messages, Room
@@ -10,21 +7,26 @@ from schemas import Token
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 from auth import authenticate_user
-from config import SECRET_KEY, ALGORITHM
+from app.config import SECRET_KEY, ALGORITHM
 import random, string
 from game_models import GameRoom, Player
 from room_storage import active_rooms
+import asyncio
+
 
 router = APIRouter(prefix="/ws", tags=["Rooms"])
 
+# Словник для збереження обробників повідомлень
 message_handlers = {}
 
+# Помилка автентифікації
 credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+    status_code=status.HTTP_401_UNAUTHORIZED,
+    detail="Не вдалося перевірити облікові дані",
+    headers={"WWW-Authenticate": "Bearer"},
+)
 
+# Декоратор для реєстрації обробників повідомлень за типом
 def register_handler(message_type):
     def decorator(func):
         print(f"Registered handler: {message_type} → {func.__name__}")
@@ -32,6 +34,7 @@ def register_handler(message_type):
         return func
     return decorator
 
+# Отримуємо користувача за токеном
 async def get_user_by_token(token: str, db: Session):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -43,11 +46,12 @@ async def get_user_by_token(token: str, db: Session):
     except JWTError:
         raise credentials_exception
 
+# Генеруємо ім’я для гравця-гостя
 def generate_guest_name():
     suffix = ''.join(random.choices(string.digits, k=8))
     return f"Guest{suffix}"
 
-
+# WebSocket підключення до кімнати
 @router.websocket('/room/{room_id}')
 async def websocket_endpoint(websocket: WebSocket, room_id: int, db : Session = Depends(get_db)):
     
@@ -107,11 +111,31 @@ async def websocket_endpoint(websocket: WebSocket, room_id: int, db : Session = 
             else:
                 room.remove_player(name=username)
         
-@register_handler("chat")
-async def handle_chat(websocket, payload,room_id, db : Session = Depends(get_db)):
-    username = payload.get("username")
-    message = payload.get("message")
+        
 
+
+# async def start_vote_phase(room: GameRoom):
+#     room.phase = "vote"
+#     await room.broadcast(json.dumps({
+#         "type": "phase_change",
+#         "phase": "vote",
+#         "duration": 120  # для фронта — сколько секунд есть
+#     }))
+
+#     await asyncio.sleep(120)
+
+#     # завершаем голосование
+#     room.phase = "waiting"
+#     await room.broadcast(json.dumps({
+#         "type": "phase_ended",
+#         "phase": "vote",
+#         "message": "Голосування завершено"
+#     }))
+
+#     # обрабатываем голоса...  
+          
+# Перевірка, чи існує кімната
+async def verify_room(websocket, room_id):
     
     room = active_rooms.get(room_id)
     
@@ -120,6 +144,19 @@ async def handle_chat(websocket, payload,room_id, db : Session = Depends(get_db)
             "type": "error",
             "message": "Кімната не знайдена"
         })
+        return
+
+    return room
+        
+# Обробка чату   
+@register_handler("chat")
+async def handle_chat(websocket, payload,room_id, db : Session = Depends(get_db)):
+    username = payload.get("username")
+    message = payload.get("message")
+
+    
+    room = await verify_room(websocket=websocket, room_id=room_id)
+    if not room:
         return
 
     # Получаем Player по username
@@ -148,21 +185,16 @@ async def handle_chat(websocket, payload,room_id, db : Session = Depends(get_db)
     db.add(new_message)
     db.commit()
     
-    
+# Обробка початку гри
 @register_handler("start_game")
-async def handler_name(websocket, payload, room_id, **kwargs):
+async def handler_start_game(websocket, payload, room_id, **kwargs):
     # # должна назначить роли игроков, обозначить раунд...
     # payload = {
     #     "username" : str
     # }
     
-    room = active_rooms.get(room_id)
-    
+    room = await verify_room(websocket=websocket, room_id=room_id)
     if not room:
-        await websocket.send_json({
-            "type": "error",
-            "message": "Кімната не знайдена"
-        })
         return
     
     username = payload["username"]
@@ -201,3 +233,209 @@ async def handler_name(websocket, payload, room_id, **kwargs):
         "type": "game_started",
         "message": "Гру розпочато!"
     }))
+    
+
+async def resolve_night(room: GameRoom):
+    mafia_targets = room.night_actions["mafia"]
+    doctor_save = room.night_actions["doctor"]
+    detective_check = room.night_actions["detective"]
+
+    # Подсчет голосов мафии
+    if mafia_targets:
+        victim_id = max(set(mafia_targets), key=mafia_targets.count)
+        victim = next((p for p in room.players.values() if p.id == victim_id), None)
+
+        if victim:
+            if doctor_save == victim.id:
+                await room.broadcast(json.dumps({
+                    "type": "player_saved",
+                    "message": f"Гравця {victim.name} намагались вбити, але лікар врятував його!"
+                }))
+            else:
+                victim.is_alive = False
+                await room.broadcast(json.dumps({
+                    "type": "player_killed",
+                    "message": f"{victim.name} був вбитий цієї ночі."
+                }))
+
+    if detective_check:
+        checked = next((p for p in room.players.values() if p.id == detective_check), None)
+        if checked:
+            detective = next((p for p in room.players.values() if p.role == "detective"), None)
+            if detective:
+                await detective.websocket.send_json({
+                    "type": "investigation_result",
+                    "target": checked.name,
+                    "is_mafia": checked.role == "mafia"
+                })
+
+    # Очистка на следующий раунд
+    room.night_actions = {
+        "mafia": [],
+        "doctor": None,
+        "detective": None
+    }
+
+    # Переход к дневной фазе
+    room.phase = "day"
+
+def check_game_end(room: GameRoom):
+    mafia_alive = [p for p in room.players.values() if p.role == "mafia" and p.is_alive]
+    citizens_alive = [p for p in room.players.values() if p.role != "mafia" and p.is_alive]
+    
+    if not mafia_alive:
+        return "citizens"
+    if len(mafia_alive) >= len(citizens_alive):
+        return "mafia"
+    return None
+
+
+
+# Обробка нічних дій (наприклад, вбивство)
+@register_handler("night_action")
+async def night_action(websocket, payload, room_id, **kwargs):
+    """
+    payload = {
+        "actor_id": int,
+        "target_id": int
+    }
+    """
+    room = await verify_room(websocket, room_id)
+    if not room:
+        return
+    
+    if room.is_game_over:
+        await websocket.send_json({
+            "type": "error",
+            "message": "Гра вже завершена"
+        })
+        return
+    
+    actor = next((p for p in room.players.values() if p.id == payload["actor_id"]), None)
+    target = next((p for p in room.players.values() if p.id == payload["target_id"]), None)
+
+    if not actor or not target:
+        await websocket.send_json({
+            "type": "error",
+            "message": "Гравець не знайдений"
+        })
+        return
+
+    if not actor.is_alive:
+        await websocket.send_json({
+            "type": "error",
+            "message": "Мертвий гравець не може діяти"
+        })
+        return
+
+    # Сохраняем действия
+    if actor.role == "mafia":
+        room.night_actions["mafia"].append(target.id)
+    elif actor.role == "doctor":
+        room.night_actions["doctor"] = target.id
+    elif actor.role == "detective":
+        room.night_actions["detective"] = target.id
+
+    actor.is_ready = True
+
+    if all(p.is_ready for p in room.players.values() if p.role in {"mafia", "doctor", "detective"} and p.is_alive):
+        await resolve_night(room)
+        
+    winner = check_game_end(room)
+    if winner:
+        await room.broadcast(json.dumps({
+            "type": "game_over",
+            "winner": winner,
+            "message": f"Гру завершено! Перемогли { 'мирні' if winner == 'citizens' else 'мафія' }."
+        }))
+        room.phase = "ended"
+        await room.broadcast(json.dumps({
+                "type": "roles_reveal",
+                "players": [
+                    {"name": p.name, "role": p.role, "is_alive": p.is_alive}
+                    for p in room.players.values()
+                ]
+            }))
+        return
+    
+    for p in room.players.values():
+        p.is_ready = False
+
+    await room.broadcast(json.dumps({
+    "type": "phase_change",
+    "phase": "day"
+    }))
+    
+@register_handler("vote")
+async def vote(websocket, payload, room_id, **kwargs):
+    # payload = {
+    #     "player_id" : int,
+    #     "target_id" : int
+    # }
+    
+    room = await verify_room(websocket, room_id)
+    if not room:
+        return
+    
+    if room.is_game_over:
+        await websocket.send_json({
+            "type": "error",
+            "message": "Гра вже завершена"
+        })
+        return
+    
+    player = next((p for p in room.players.values() if p.id == payload["player_id"]), None)
+    if not player or not player.is_alive:
+        await websocket.send_json({
+            "type": "error",
+            "message": "Невірний гравець або мертвий"
+        })
+        return
+    
+    target_id = payload["target_id"]
+    room.votes[target_id] = room.votes.get(target_id, 0) + 1
+    player.is_ready = True
+    
+    await room.broadcast(json.dumps({
+        "type": "vote_cast",
+        "from": player.name,
+        "to": next((p.name for p in room.players.values() if p.id == target_id), "невідомо")
+    }))
+    
+    if all(p.is_ready for p in room.players.values() if p.is_alive):
+
+        victim_id = max(room.votes.items(), key=lambda x: x[1])[0]
+        victim = next((p for p in room.players.values() if p.id == victim_id), None)
+        if victim:
+            victim.is_alive = False
+            await room.broadcast(json.dumps({
+                "type": "player_killed_vote",
+                "message": f"{victim.name} був повішений за результатами голосування."
+            }))
+    
+        for p in room.players.values():
+            p.is_ready = False
+        
+        winner = check_game_end(room)
+        if winner:
+            await room.broadcast(json.dumps({
+                "type": "game_over",
+                "winner": winner,
+                "message": f"Гру завершено! Перемогли { 'мирні' if winner == 'citizens' else 'мафія' }."
+            }))
+            room.phase = "ended"
+            await room.broadcast(json.dumps({
+                    "type": "roles_reveal",
+                    "players": [
+                        {"name": p.name, "role": p.role, "is_alive": p.is_alive}
+                        for p in room.players.values()
+                    ]
+                }))
+            return
+        
+        room.votes = {}
+        room.phase = "night"
+        await room.broadcast(json.dumps({
+            "type": "phase_change",
+            "phase": "night"
+        }))
