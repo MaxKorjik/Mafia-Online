@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
@@ -6,25 +6,15 @@ from typing import Optional
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
-
-from app import models, schemas, database
-
-# импортировать с конфига
-SECRET_KEY = "SECRET_KEY"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+from app.config import ALGORITHM, SECRET_KEY
+from app import models, schemas
+from app.database import get_db
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
-app = FastAPI()
+router = APIRouter()
 
-def get_db():
-    db = database.SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
@@ -66,7 +56,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         raise credentials_exception
     return user
 
-@app.post("/register")
+@router.post("/register")
 def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
     existing_user = db.query(models.User).filter((models.User.email == user.email) | (models.User.username == user.username)).first()
     if existing_user:
@@ -78,7 +68,7 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db.refresh(db_user)
     return {"msg": "User registered successfully"}
 
-@app.post("/login")
+@router.post("/login")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
@@ -90,6 +80,6 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     access_token = create_access_token(data={"sub": user.username})
     return {"access_token": access_token, "token_type": "bearer"}
 
-@app.get("/me")
+@router.get("/me")
 def get_me(current_user: models.User = Depends(get_current_user)):
     return {"username": current_user.username, "email": current_user.email}

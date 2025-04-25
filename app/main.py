@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from app import models, schemas, database
-from app.auth import app as auth_app, get_current_user
+from app.auth import  get_current_user
 from app.game_rooms.game_rooms import router as game_router
 from app.auth import router as auth_router
 
@@ -13,7 +13,6 @@ models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI(title="Mafia Game")
 
-app.mount("/auth", auth_app)
 
 app.include_router(game_router)
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
