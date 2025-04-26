@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional, Union
+from typing import List, Optional
 
 class UserBase(BaseModel):
     id: int
