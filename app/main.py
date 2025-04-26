@@ -3,10 +3,14 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+import random, string
+from typing import Optional
 
 from app import models, schemas, database
 from app.auth import app as auth_app, get_current_user
 from app.game_rooms.game_rooms import router as game_router
+from app.game_rooms.room_storage import active_rooms
+from app.game_rooms.game_models import GameRoom
 from app.config import SECRET_KEY, ACCESS_TOKEN_EXPIRE_MINUTES
 from app.auth import router as auth_router
 
@@ -60,21 +64,41 @@ async def get_room(room_id: int, db: Session = Depends(get_db)):
 @app.post("/api/rooms", response_model=schemas.RoomResponse)
 async def create_room(
         room: schemas.RoomCreate,
-        current_user: models.User = Depends(get_current_user),
+        current_user: Optional[models.User] = Depends(get_current_user),
         db: Session = Depends(get_db)
 ):
+    if not current_user.is_authenticated:
+        guestname = ''.join(random.choices(string.digits, k=8))
+        owner_id = None
+        return f"Guest{guestname}"
+
+    else:
+        guestname=None
+        owner_id = current_user.id
+
     db_room = models.Room(
         name=room.name,
         password=room.password,
-        owner=current_user.id,
+        owner=owner_id,
         max_players_number=room.max_players_number,
         is_private=room.is_private
     )
     db.add(db_room)
     db.commit()
     db.refresh(db_room)
-    return db_room
 
+    game_room = GameRoom(
+        id = db_room.id,
+        name = db_room.name,
+        password = db_room.password,
+        owner = db_room.owner,
+        guestname = guestname, 
+        max_players_number = db_room.max_players_number,
+        is_private = db_room.is_private,
+        players_number =[]
+    )
+    active_rooms[db_room.id] = game_room
+    return db_room
 
 @app.delete("/api/rooms/{room_id}")
 async def delete_room(
