@@ -70,7 +70,6 @@ async def create_room(
     if not current_user.is_authenticated:
         guestname = ''.join(random.choices(string.digits, k=8))
         owner_id = None
-        return f"Guest{guestname}"
 
     else:
         guestname=None
