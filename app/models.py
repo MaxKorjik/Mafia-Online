@@ -39,6 +39,7 @@ class Room(Base):
     password = Column(String, nullable=True)
     owner = Column(Integer, ForeignKey("user.id"))
     players_number = Column(Integer, default=0)
-    max_players_number = Column(Integer, default=10)
+    min_players_number = Column(Integer, default=6)
+    max_players_number = Column(Integer, default=6)
     is_private = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)

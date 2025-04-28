@@ -31,10 +31,12 @@ class Player:
         
 # Клас кімнати гри
 class GameRoom:
-    def __init__(self, room_id: int, max_players: int = 6, is_private: bool = False, owner_name : str = None):
+    def __init__(self, room_id: int, room_name: str, min_players : int = 6,max_players: int = 6, is_private: bool = False, owner_name : str = None):
         self.room_id = room_id  # Унікальний ID кімнати
+        self.room_name = room_name
         self.players: Dict[str, Player] = {}  # Список гравців у кімнаті
         self.owner : str = owner_name  # Ім’я власника кімнати
+        self.min_players = min_players
         self.max_players = max_players  # Максимальна кількість гравців
         self.is_private = is_private  # Приватність кімнати
         self.phase = "waiting"  # Поточна фаза гри
@@ -47,6 +49,7 @@ class GameRoom:
             }
         self.votes: Dict[int, int] = {}
         self.is_game_over = False
+        
     # Додаємо гравця до кімнати
     def add_player(self, name: str, websocket, user_id=None):
         if len(self.players) < self.max_players:

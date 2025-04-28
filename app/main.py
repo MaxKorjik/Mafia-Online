@@ -1,21 +1,26 @@
-from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi import FastAPI, Depends, HTTPException, Request, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-
+from app.database import get_db
 from app import models, schemas, database
 from app.auth import  get_current_user
 from app.game_rooms.game_rooms import router as game_router
 from app.auth import router as auth_router
-
+import random, string
 models.Base.metadata.create_all(bind=database.engine)
+from app.game_rooms.room_storage import active_rooms
+from app.game_rooms.game_models import GameRoom
+from typing import Optional
+from sqlalchemy import delete
 
 app = FastAPI(title="Mafia Game")
 
 
 app.include_router(game_router)
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,14 +31,6 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
-
-
-def get_db():
-    db = database.SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 @app.get("/")
@@ -58,20 +55,46 @@ async def get_room(room_id: int, db: Session = Depends(get_db)):
 @app.post("/api/rooms", response_model=schemas.RoomResponse)
 async def create_room(
         room: schemas.RoomCreate,
-        current_user: models.User = Depends(get_current_user),
+        password: Optional[str] = Query(None),
+        current_user: Optional[models.User] = Depends(get_current_user),
         db: Session = Depends(get_db)
 ):
+    if room.is_private and not password: 
+        raise HTTPException(status_code=400, detail="Password is required for private rooms")
+    
+    if current_user is None:
+        guestname = ''.join(random.choices(string.digits, k=8))
+        owner = guestname
+        owner_id = None
+
+    else:
+        guestname=None
+        owner_id = current_user.id
+        owner = current_user.username
+
     db_room = models.Room(
         name=room.name,
-        password=room.password,
-        owner=current_user.id,
+        password=password,
+        owner=owner_id,
+        min_players_number = room.min_players_number,
         max_players_number=room.max_players_number,
         is_private=room.is_private
     )
     db.add(db_room)
     db.commit()
     db.refresh(db_room)
+
+    game_room = GameRoom(
+        room_id = db_room.id,
+        room_name = db_room.name,
+        owner_name = owner,
+        min_players = db_room.min_players_number,
+        max_players = db_room.max_players_number,
+        is_private = db_room.is_private,
+    )
+    active_rooms[db_room.id] = game_room
     return db_room
+
 
 
 @app.delete("/api/rooms/{room_id}")
@@ -80,17 +103,14 @@ async def delete_room(
         current_user: models.User = Depends(get_current_user),
         db: Session = Depends(get_db)
 ):
-    room = db.query(models.Room).filter(models.Room.id == room_id).first()
-    if not room:
-        raise HTTPException(status_code=404, detail="Room not found")
-
-    if room.owner != current_user.id and not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Not authorized to delete this room")
-
-    db.delete(room)
+    
+    room = delete(models.Room).where(models.Room.id == room_id, models.Room.owner == current_user.id)
+    db.execute(room)
     db.commit()
-    return {"message": "Room deleted successfully"}
 
+    if room_id in active_rooms: 
+        del active_rooms[room_id]
+    return {"message": "Room deleted successfully"}
 
 # User profile routes
 @app.get("/api/users/{user_id}", response_model=schemas.UserResponse)
