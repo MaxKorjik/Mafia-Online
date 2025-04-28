@@ -1,18 +1,19 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, status, Depends
+from fastapi.websockets import WebSocketState
 import json
 from app.database import get_db
 from app.models import Messages
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
-from app.auth import authenticate_user
+from app.auth import  get_user_by_email
 from app.config import SECRET_KEY, ALGORITHM
 import random, string
 from app.game_rooms.game_models import GameRoom, Player
 from app.game_rooms.room_storage import active_rooms
 import asyncio
+from app.models import Room
 
-
-router = APIRouter(prefix="/ws", tags=["Rooms"])
+router = APIRouter(tags=["Rooms"])
 
 # Словник для збереження обробників повідомлень
 message_handlers = {}
@@ -35,13 +36,17 @@ def register_handler(message_type):
 # Отримуємо користувача за токеном
 async def get_user_by_token(token: str, db: Session):
     try:
+        print(f"Decoding token: {token}")
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
+            print("No email found in token")
             raise credentials_exception
-        user = authenticate_user(db, email)
+        user = get_user_by_email(db, email)
+        print(f"User found: {user}")
         return user
-    except JWTError:
+    except JWTError as e:
+        print(f"JWT Error: {e}")
         raise credentials_exception
 
 # Генеруємо ім’я для гравця-гостя
@@ -60,26 +65,32 @@ async def websocket_endpoint(websocket: WebSocket, room_id: int, db : Session = 
         await websocket.send_json({"type": "error", "message": "Room not found"})
         await websocket.close()
         return
-        
+            
     token = websocket.query_params.get("token")
-    if not token:
-        await websocket.close()
-        return
+    print(f"Received token: {token}")
+    guestname = websocket.query_params.get("guestname")
+
+    user = None
+    if token:
+        user = await get_user_by_token(token=token, db=db)
     
-    user = await get_user_by_token(token=token, db=db)
     username = None
     if user:
         username = user.username
         room.add_player(name=username, websocket=websocket)
         await room.broadcast(f"Користувач {username} під'єднався")
     else:
-        username = generate_guest_name()
+        if guestname:
+            username = guestname
+        else:
+                username = generate_guest_name()
         room.add_player(name=username, websocket=websocket)
         await room.broadcast(f"Користувач {username} під'єднався")
         
     while True:
         try:
-            data = await websocket.receive_text()
+            if websocket.client_state == WebSocketState.CONNECTED:
+                data = await websocket.receive_text()
             
             if data:
                 try:
@@ -100,7 +111,8 @@ async def websocket_endpoint(websocket: WebSocket, room_id: int, db : Session = 
                 except (ValueError, KeyError):
                     await websocket.send_text("Невірний формат повідомлення.")
                     continue
-                        
+            else:
+                break             
             
         except WebSocketDisconnect:
             if user:
@@ -108,7 +120,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: int, db : Session = 
                 await room.broadcast(f"Користувач {user.username} від'єднався")
             else:
                 room.remove_player(name=username)
-        
+            break 
         
 
 
@@ -187,8 +199,11 @@ async def handle_chat(websocket, payload,room_id, db : Session = Depends(get_db)
 @register_handler("start_game")
 async def handler_start_game(websocket, payload, room_id, **kwargs):
     # # должна назначить роли игроков, обозначить раунд...
-    # payload = {
-    #     "username" : str
+    # {
+    #     "type" : "start_game",
+    #     "payload" : {
+    #         "username" : "Guest1488"
+    #         }
     # }
     
     room = await verify_room(websocket=websocket, room_id=room_id)

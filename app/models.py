@@ -35,9 +35,9 @@ class Room(Base):
     __tablename__ = "room"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, index=True)
+    name = Column(String, index=True)
     password = Column(String, nullable=True)
-    owner = Column(Integer, ForeignKey("user.id"))
+    owner = Column(Integer, ForeignKey("user.id"), nullable=True)
     players_number = Column(Integer, default=0)
     min_players_number = Column(Integer, default=6)
     max_players_number = Column(Integer, default=6)
