@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, Text, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import JSON
-from .database import Base
+from app.database import Base
 from datetime import datetime
 
 class User(Base):
@@ -35,10 +35,11 @@ class Room(Base):
     __tablename__ = "room"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, index=True)
+    name = Column(String, index=True)
     password = Column(String, nullable=True)
-    owner = Column(Integer, ForeignKey("user.id"))
+    owner = Column(Integer, ForeignKey("user.id"), nullable=True)
     players_number = Column(Integer, default=0)
-    max_players_number = Column(Integer, default=10)
+    min_players_number = Column(Integer, default=6)
+    max_players_number = Column(Integer, default=6)
     is_private = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
