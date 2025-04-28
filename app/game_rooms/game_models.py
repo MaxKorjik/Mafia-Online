@@ -1,4 +1,3 @@
-from typing import Dict
 import asyncio
 import random
 from typing import List, Dict
@@ -94,3 +93,4 @@ class GameRoom:
             if p.id == player_id:
                 p.is_alive = False
                 break
+
