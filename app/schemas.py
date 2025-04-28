@@ -45,7 +45,7 @@ class RoomBase(BaseModel):
     is_private: bool = False
     min_players_number : int = 6
     max_players_number: int = 6
-    password: Optional[str] = None
+
 
 class RoomCreate(RoomBase):
     pass
