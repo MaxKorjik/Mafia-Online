@@ -77,14 +77,14 @@ async def websocket_endpoint(websocket: WebSocket, room_id: int, db : Session = 
     username = None
     if user:
         username = user.username
-        room.add_player(name=username, websocket=websocket)
+        await room.add_player(name=username, websocket=websocket)
         await room.broadcast(f"Користувач {username} під'єднався")
     else:
         if guestname:
             username = guestname
         else:
                 username = generate_guest_name()
-        room.add_player(name=username, websocket=websocket)
+        await room.add_player(name=username, websocket=websocket)
         await room.broadcast(f"Користувач {username} під'єднався")
         
     while True:
@@ -116,10 +116,11 @@ async def websocket_endpoint(websocket: WebSocket, room_id: int, db : Session = 
             
         except WebSocketDisconnect:
             if user:
-                room.remove_player(name=user.username)
-                await room.broadcast(f"Користувач {user.username} від'єднався")
+                room.remove_player(name=username)
+                await room.broadcast(f"Користувач {username} від'єднався")
             else:
                 room.remove_player(name=username)
+                await room.broadcast(f"Користувач {username} від'єднався")
             break 
         
 
