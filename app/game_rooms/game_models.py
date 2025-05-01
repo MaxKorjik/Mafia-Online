@@ -3,6 +3,7 @@ import random
 from typing import List, Dict
 
 from fastapi import WebSocketDisconnect
+from websockets import broadcast
 
 # Клас гравця, що представляє окремого користувача в грі
 class Player:
@@ -50,9 +51,12 @@ class GameRoom:
         self.is_game_over = False
         
     # Додаємо гравця до кімнати
-    def add_player(self, name: str, websocket, user_id=None):
+    async def add_player(self, name: str, websocket, user_id=None):
         if len(self.players) < self.max_players:
-            self.players[name] = Player(name=name, websocket=websocket, id=user_id)
+            player = Player(name=name, websocket=websocket, id=user_id)
+            self.players[name] = player
+        else:
+            await websocket.send_text(f"Кімната вже заповнена!")
 
     # Видаляємо гравця з кімнати
     def remove_player(self, name: str):
