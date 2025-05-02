@@ -1,8 +1,12 @@
 import asyncio
 import random
 from typing import List, Dict
+from sqlalchemy.orm import Session
+from app.models import Room
+from itertools import count
 
 from fastapi import WebSocketDisconnect
+from websockets import broadcast
 
 # Клас гравця, що представляє окремого користувача в грі
 class Player:
@@ -33,6 +37,7 @@ class GameRoom:
     def __init__(self, room_id: int, room_name: str, min_players : int = 6,max_players: int = 6, is_private: bool = False, owner_name : str = None):
         self.room_id = room_id  # Унікальний ID кімнати
         self.room_name = room_name
+        self.guest_id_counter = count(-1, -1)
         self.players: Dict[str, Player] = {}  # Список гравців у кімнаті
         self.owner : str = owner_name  # Ім’я власника кімнати
         self.min_players = min_players
@@ -50,14 +55,33 @@ class GameRoom:
         self.is_game_over = False
         
     # Додаємо гравця до кімнати
-    def add_player(self, name: str, websocket, user_id=None):
+    async def add_player(self, name: str, websocket, user_id=None, db : Session = None):
         if len(self.players) < self.max_players:
-            self.players[name] = Player(name=name, websocket=websocket, id=user_id)
+            if user_id:
+                player_id = user_id
+            else:
+                player_id = next(self.guest_id_counter)
+
+            player = Player(name=name, websocket=websocket, id=player_id)
+            self.players[name] = player
+            if db:
+                room_in_db = db.query(Room).filter(Room.id == self.room_id).first()
+                if room_in_db:
+                    room_in_db.players_number = len(self.players)
+                    db.commit()
+            print(f"[Room {self.room_id}] Додано гравця: {name} (ID: {player_id})")
+        else:
+            await websocket.send_text(f"Кімната вже заповнена!")
 
     # Видаляємо гравця з кімнати
-    def remove_player(self, name: str):
+    def remove_player(self, name: str, db : Session = None):
         if name in self.players:
             del self.players[name]
+        if db:
+            room_in_db = db.query(Room).filter(Room.id == self.room_id).first()
+            if room_in_db:
+                room_in_db.players_number = len(self.players)
+                db.commit()
             
     # Розсилаємо повідомлення усім гравцям у кімнаті
     async def broadcast(self, message: str):
