@@ -77,14 +77,14 @@ async def websocket_endpoint(websocket: WebSocket, room_id: int, db : Session = 
     username = None
     if user:
         username = user.username
-        await room.add_player(name=username, websocket=websocket)
+        await room.add_player(name=username, user_id=user.id, websocket=websocket, db=db)
         await room.broadcast(f"Користувач {username} під'єднався")
     else:
         if guestname:
             username = guestname
         else:
                 username = generate_guest_name()
-        await room.add_player(name=username, websocket=websocket)
+        await room.add_player(name=username, websocket=websocket, db=db)
         await room.broadcast(f"Користувач {username} під'єднався")
         
     while True:
@@ -116,10 +116,10 @@ async def websocket_endpoint(websocket: WebSocket, room_id: int, db : Session = 
             
         except WebSocketDisconnect:
             if user:
-                room.remove_player(name=username)
+                room.remove_player(name=username, db=db)
                 await room.broadcast(f"Користувач {username} від'єднався")
             else:
-                room.remove_player(name=username)
+                room.remove_player(name=username, db=db)
                 await room.broadcast(f"Користувач {username} від'єднався")
             break 
         
@@ -307,7 +307,7 @@ def check_game_end(room: GameRoom):
 
 # Обробка нічних дій (наприклад, вбивство)
 @register_handler("night_action")
-async def night_action(websocket, payload, room_id, **kwargs):
+async def night_action(websocket, payload, room_id, db, **kwargs):
     """
     payload = {
         "actor_id": int,
@@ -363,6 +363,13 @@ async def night_action(websocket, payload, room_id, **kwargs):
             "message": f"Гру завершено! Перемогли { 'мирні' if winner == 'citizens' else 'мафія' }."
         }))
         room.phase = "ended"
+        room.is_game_over = True
+        
+        db_room = db.query(Room).filter(Room.id == room_id).first()
+        if db_room:
+            db_room.is_active = False
+            db.commit()
+                
         await room.broadcast(json.dumps({
                 "type": "roles_reveal",
                 "players": [
@@ -381,7 +388,7 @@ async def night_action(websocket, payload, room_id, **kwargs):
     }))
     
 @register_handler("vote")
-async def vote(websocket, payload, room_id, **kwargs):
+async def vote(websocket, payload, room_id, db, **kwargs):
     # payload = {
     #     "player_id" : int,
     #     "target_id" : int
@@ -398,7 +405,7 @@ async def vote(websocket, payload, room_id, **kwargs):
         })
         return
     
-    player = next((p for p in room.players.values() if p.id == payload["player_id"]), None)
+    player = next((p for p in room.players.values() if p.id == int(payload["player_id"])), None)
     if not player or not player.is_alive:
         await websocket.send_json({
             "type": "error",
@@ -406,7 +413,7 @@ async def vote(websocket, payload, room_id, **kwargs):
         })
         return
     
-    target_id = payload["target_id"]
+    target_id = int(payload["target_id"])
     room.votes[target_id] = room.votes.get(target_id, 0) + 1
     player.is_ready = True
     
@@ -438,6 +445,12 @@ async def vote(websocket, payload, room_id, **kwargs):
                 "message": f"Гру завершено! Перемогли { 'мирні' if winner == 'citizens' else 'мафія' }."
             }))
             room.phase = "ended"
+            
+            db_room = db.query(Room).filter(Room.id == room_id).first()
+            if db_room:
+                db_room.is_active = False
+                db.commit()
+                
             await room.broadcast(json.dumps({
                     "type": "roles_reveal",
                     "players": [
