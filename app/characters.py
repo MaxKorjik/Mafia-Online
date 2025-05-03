@@ -90,5 +90,27 @@ class ChildPsychologist:
     items = "Teddy bear and children's books"
     fear = "Crying children"
 
+class Event:
+    def __init__(self, description, related_to=None):
+        self.description = description
+        self.related_to = related_to  # Link to character name
+
+    def __str__(self):
+        return f"Event: {self.description}\nRelated to: {self.related_to if self.related_to else 'Unknown'}\n"
+
+
+events = [
+    Event("Near the body, a torn guitar string was found. The word 'TIGHT' was scratched into the wall.", "Surgeon"),
+    Event("At the shelter entrance, a drawing was left open. A blood drop stained one corner. Tracks led to a children's library.", "Teacher"),
+    Event("A pool of water covered the floor. A shattered solar panel lay inside. Someone left in a hurry.", "Programmer"),
+    Event("In the garden, torn vegetable seed packs were scattered. A crow feather lay on the soil.", "Agronomist"),
+    Event("By a burned-out campfire, a military jacket button was found. Someone had fired a weapon... at no one.", "Ex-Soldier"),
+    Event("A portable speaker was still playing music on the theater steps. No one was around to listen.", "Theater Actor"),
+    Event("In the workshop, generator parts were strewn everywhere. Crumpled earplugs lay in the corner.", "Mechanical Engineer"),
+    Event("A medical bag was neatly left on a rock. A dusty handprint stained its surface.", "Pharmacist"),
+    Event("Pages from '100 Ways to Build a New Society' were torn and scattered. Some were covered in confused handwriting.", "Science Fiction Writer"),
+    Event("A scorched teddy bear lay in the room's corner. Tear stains were visible nearby.", "Child Psychologist"),
+]
+
 
 

@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, Text, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import JSON
-from .database import Base
+from database import Base 
 from datetime import datetime
 
 class User(Base):
@@ -42,3 +42,4 @@ class Room(Base):
     max_players_number = Column(Integer, default=10)
     is_private = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
+
