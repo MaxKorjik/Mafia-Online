@@ -11,6 +11,7 @@ config.py
 .env
 *.ini
 *.cfg
+mafia.db
 
 # Distribution / packaging
 .Python

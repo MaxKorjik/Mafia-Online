@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
@@ -6,26 +6,16 @@ from typing import Optional
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
-from fastapi import APIRouter
-from app import models, schemas, database
-
-SECRET_KEY = "SECRET_KEY"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-router = APIRouter()
-
+from app.config import ALGORITHM, SECRET_KEY
+from app import models, schemas
+from app.database import get_db
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
-app = FastAPI()
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
-def get_db():
-    db = database.SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+router = APIRouter()
+
 
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
@@ -37,6 +27,12 @@ def authenticate_user(db, username_or_email: str, password: str):
     user = db.query(models.User).filter((models.User.email == username_or_email) | (models.User.username == username_or_email)).first()
     if not user or not verify_password(password, user.hashed_password):
         return False
+    return user
+
+def get_user_by_email(db: Session, email: str):
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if user is None:
+        print(f"User with email {email} not found")
     return user
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
@@ -56,13 +52,13 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
+        user_email: str = payload.get("sub")
+        if user_email is None:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
 
-    user = db.query(models.User).filter(models.User.username == username).first()
+    user = db.query(models.User).filter(models.User.email == user_email).first()
     if user is None:
         raise credentials_exception
     return user
@@ -79,7 +75,7 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db.refresh(db_user)
     return {"msg": "User registered successfully"}
 
-@router.post("/login")
+@router.post("/login", summary="Login user and get access token", tags=["Auth"])
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
@@ -88,7 +84,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    access_token = create_access_token(data={"sub": user.username})
+    access_token = create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.get("/me")

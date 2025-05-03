@@ -43,8 +43,9 @@ class AddFriend(BaseModel):
 class RoomBase(BaseModel):
     name: str
     is_private: bool = False
-    max_players_number: int = 10
-    password: Optional[str] = None
+    min_players_number : int = 6
+    max_players_number: int = 6
+
 
 class RoomCreate(RoomBase):
     pass
