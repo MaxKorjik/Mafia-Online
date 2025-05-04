@@ -69,7 +69,6 @@ class GameRoom:
                 if room_in_db:
                     room_in_db.players_number = len(self.players)
                     db.commit()
-            print(f"[Room {self.room_id}] Додано гравця: {name} (ID: {player_id})")
         else:
             await websocket.send_text(f"Кімната вже заповнена!")
 
