@@ -1,8 +1,8 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, status, Depends
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, status, Depends, Query
 from fastapi.websockets import WebSocketState
 import json
 from app.database import get_db
-from app.models import Messages
+from app.models import Messages, User, Room
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 from app.auth import  get_user_by_email
@@ -11,7 +11,8 @@ import random, string
 from app.game_rooms.game_models import GameRoom, Player
 from app.game_rooms.room_storage import active_rooms
 import asyncio
-from app.models import Room
+from datetime import datetime
+from typing import Dict
 
 router = APIRouter(tags=["Rooms"])
 
@@ -49,102 +50,172 @@ async def get_user_by_token(token: str, db: Session):
         print(f"JWT Error: {e}")
         raise credentials_exception
 
-# Генеруємо ім’я для гравця-гостя
+# Генеруємо ім'я для гравця-гостя
 def generate_guest_name():
     suffix = ''.join(random.choices(string.digits, k=8))
     return f"Guest{suffix}"
 
 # WebSocket підключення до кімнати
-@router.websocket('/room/{room_id}')
-async def websocket_endpoint(websocket: WebSocket, room_id: int, db : Session = Depends(get_db)):
-    
-    await websocket.accept()
+@router.websocket("/ws/room/{room_id}")
+async def websocket_endpoint(websocket: WebSocket, room_id: int, token: str = Query(None), db: Session = Depends(get_db)):
+    """
+    WebSocket endpoint для кімнати
+    """
     try:
-        room = active_rooms[room_id]
-    except KeyError:
-        await websocket.send_json({"type": "error", "message": "Room not found"})
-        await websocket.close()
-        return
-            
-    token = websocket.query_params.get("token")
-    print(f"Received token: {token}")
-    guestname = websocket.query_params.get("guestname")
-
-    user = None
-    if token:
-        user = await get_user_by_token(token=token, db=db)
-    
-    username = None
-    if user:
-        username = user.username
-        await room.add_player(name=username, user_id=user.id, websocket=websocket, db=db)
-        await room.broadcast(f"Користувач {username} під'єднався")
-    else:
-        if guestname:
-            username = guestname
-        else:
-                username = generate_guest_name()
-        await room.add_player(name=username, websocket=websocket, db=db)
-        await room.broadcast(f"Користувач {username} під'єднався")
+        print(f"WebSocket connection attempt for room {room_id}")
         
-    while True:
-        try:
-            if websocket.client_state == WebSocketState.CONNECTED:
-                data = await websocket.receive_text()
+        # Перевіряємо токен
+        if not token:
+            print("No token provided")
+            await websocket.close(code=4000)
+            return
             
-            if data:
-                try:
-                    message = json.loads(data)
-                    msg_type = message.get("type")
-                    payload = message.get("payload", {})
-                    
-                    handler = message_handlers.get(msg_type)
-                    
-                    if handler:
-                        await handler(websocket=websocket, payload=payload, room_id=room_id, db=db)
-                    else:
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            user_email = payload.get("sub")
+            if not user_email:
+                print("No email in token")
+                await websocket.close(code=4000)
+                return
+        except Exception as e:
+            print(f"Token verification error: {str(e)}")
+            await websocket.close(code=4000)
+            return
+
+        # Отримуємо користувача з бази даних
+        user = db.query(User).filter(User.email == user_email).first()
+        if not user:
+            print(f"User not found for email: {user_email}")
+            await websocket.close(code=4000)
+            return
+
+        # Перевіряємо чи існує кімната в базі даних
+        db_room = db.query(Room).filter(Room.id == room_id).first()
+        if not db_room:
+            print(f"Room {room_id} not found in database")
+            await websocket.close(code=4000)
+            return
+
+        # Перевіряємо чи існує кімната в активних кімнатах
+        room = active_rooms.get(room_id)
+        if not room:
+            # Якщо кімнати немає в active_rooms, створюємо її
+            room = GameRoom(
+                room_id=db_room.id,
+                room_name=db_room.name,
+                min_players=db_room.min_players_number,
+                max_players=db_room.max_players_number,
+                is_private=db_room.is_private,
+                owner=db_room.owner
+            )
+            active_rooms[room_id] = room
+            print(f"Created new room instance: {room.room_id}")
+
+        # Приймаємо з'єднання
+        await websocket.accept()
+        print(f"WebSocket connection accepted for user {user.id} in room {room_id}")
+
+        # Додаємо гравця до кімнати
+        player = Player(id=user.id, name=user.username, websocket=websocket, room=room)
+        room.add_player(player)
+        print(f"Player {user.id} added to room {room_id}")
+
+        # Додаємо з'єднання до кімнати
+        room.add_connection(websocket)
+        print(f"Connection added for player {user.id} in room {room_id}")
+
+        # Відправляємо початковий стан кімнати
+        await websocket.send_json({
+            "type": "room_state",
+            "room": {
+                "id": room.room_id,
+                "name": room.room_name,
+                "min_players": room.min_players,
+                "max_players": room.max_players,
+                "is_private": room.is_private,
+                "owner": room.owner
+            },
+            "players": [p.to_dict() for p in room.players.values()]
+        })
+        print(f"Initial room state sent to player {user.id}")
+
+        try:
+            while True:
+                data = await websocket.receive_json()
+                print(f"Received message from player {user.id}: {data}")
+
+                if data["type"] == "toggle_ready":
+                    player.is_ready = not player.is_ready
+                    # Відправляємо оновлений стан всім гравцям
+                    await room.broadcast({
+                        "type": "player_ready",
+                        "player_id": player.id,
+                        "is_ready": player.is_ready,
+                        "players": [p.to_dict() for p in room.players.values()]
+                    })
+                    print(f"Player {user.id} ready state updated to {player.is_ready}")
+
+                elif data["type"] == "start_game":
+                    print(f"Start game request from player {player.id}")
+                    if player.id != room.owner:
+                        print(f"Player {player.id} is not the owner (owner is {room.owner})")
                         await websocket.send_json({
                             "type": "error",
-                            "message": f"Unknown message type: {msg_type}"
+                            "message": "Тільки власник кімнати може почати гру"
                         })
+                        continue
+
+                    print(f"Checking if game can start: players={len(room.players)}, min_players={room.min_players}, all_ready={all(p.is_ready for p in room.players.values())}")
+                    if not room.can_start_game():
+                        print("Game cannot start: conditions not met")
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": "Не всі гравці готові або недостатньо гравців"
+                        })
+                        continue
+
+                    try:
+                        print("Starting game...")
+                        room.start_game()
+                        print("Game started successfully")
                         
-                except (ValueError, KeyError):
-                    await websocket.send_text("Невірний формат повідомлення.")
-                    continue
-            else:
-                break             
-            
+                        # Відправляємо оновлений стан кімнати
+                        await room.broadcast({
+                            "type": "game_started",
+                            "phase": room.phase,
+                            "round": room.round,
+                            "players": [p.to_dict() for p in room.players.values()]
+                        })
+                        print(f"Game state broadcasted to all players")
+                    except Exception as e:
+                        print(f"Error starting game: {str(e)}")
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": f"Помилка при запуску гри: {str(e)}"
+                        })
+
         except WebSocketDisconnect:
-            if user:
-                room.remove_player(name=username, db=db)
-                await room.broadcast(f"Користувач {username} від'єднався")
+            print(f"WebSocket disconnected for player {user.id}")
+            room.remove_connection(websocket)
+            room.remove_player(player)
+            if not room.players:
+                del active_rooms[room_id]
+                print(f"Room {room_id} deleted as it's empty")
             else:
-                room.remove_player(name=username, db=db)
-                await room.broadcast(f"Користувач {username} від'єднався")
-            break 
-        
+                await room.broadcast({
+                    "type": "player_left",
+                    "player_id": player.id,
+                    "players": [p.to_dict() for p in room.players.values()]
+                })
+                print(f"Player {user.id} removed from room {room_id}")
 
+    except Exception as e:
+        print(f"Error in WebSocket connection: {str(e)}")
+        try:
+            await websocket.close(code=1011)
+        except:
+            pass
 
-# async def start_vote_phase(room: GameRoom):
-#     room.phase = "vote"
-#     await room.broadcast(json.dumps({
-#         "type": "phase_change",
-#         "phase": "vote",
-#         "duration": 120  # для фронта — сколько секунд есть
-#     }))
-
-#     await asyncio.sleep(120)
-
-#     # завершаем голосование
-#     room.phase = "waiting"
-#     await room.broadcast(json.dumps({
-#         "type": "phase_ended",
-#         "phase": "vote",
-#         "message": "Голосування завершено"
-#     }))
-
-#     # обрабатываем голоса...  
-          
 # Перевірка, чи існує кімната
 async def verify_room(websocket, room_id):
     
@@ -161,17 +232,13 @@ async def verify_room(websocket, room_id):
         
 # Обробка чату   
 @register_handler("chat")
-async def handle_chat(websocket, payload,room_id, db : Session = Depends(get_db)):
-    username = payload.get("username")
-    message = payload.get("message")
-
-    
+async def handle_chat(websocket: WebSocket, payload: dict, room_id: int, db: Session):
     room = await verify_room(websocket=websocket, room_id=room_id)
     if not room:
         return
 
-    # Получаем Player по username
-    player = room.players.get(username)
+    # Знаходимо гравця за WebSocket
+    player = next((p for p in room.players.values() if p.websocket == websocket), None)
     if not player:
         await websocket.send_json({
             "type": "error",
@@ -179,22 +246,26 @@ async def handle_chat(websocket, payload,room_id, db : Session = Depends(get_db)
         })
         return
 
+    message = payload.get("message", "")
+    if not message.strip():
+        return
 
-    # Рассылаем в комнату
+    # Відправляємо повідомлення всім гравцям
     await room.broadcast(json.dumps({
         "type": "chat",
-        "username": username,
+        "username": player.name,
         "message": message
     }))
-    
-    # Сохраняем в базу
-    new_message = Messages(
-        message=message,
-        user_id=player.id,
-        room_id=room.room_id
-    )
-    db.add(new_message)
-    db.commit()
+
+    # Зберігаємо повідомлення в базі даних
+    if player.id:  # Тільки для авторизованих користувачів
+        new_message = Messages(
+            message=message,
+            user_id=player.id,
+            room_id=room.room_id
+        )
+        db.add(new_message)
+        db.commit()
     
 # Обробка початку гри
 @register_handler("start_game")
@@ -466,3 +537,139 @@ async def vote(websocket, payload, room_id, db, **kwargs):
             "type": "phase_change",
             "phase": "night"
         }))
+
+@register_handler("toggle_ready")
+async def handle_toggle_ready(websocket: WebSocket, payload: dict, room_id: int, db: Session):
+    room = await verify_room(websocket=websocket, room_id=room_id)
+    if not room:
+        return
+
+    # Знаходимо гравця за WebSocket
+    player = next((p for p in room.players.values() if p.websocket == websocket), None)
+    if not player:
+        await websocket.send_json({
+            "type": "error",
+            "message": "Гравець не знайдений"
+        })
+        return
+
+    # Змінюємо статус готовності
+    player.is_ready = not player.is_ready
+
+    # Відправляємо оновлення всім гравцям
+    await room.broadcast(json.dumps({
+        "type": "player_ready",
+        "username": player.name,
+        "is_ready": player.is_ready,
+        "players": [p.to_dict() for p in room.players.values()]
+    }))
+
+async def handle_message(websocket: WebSocket, message: dict):
+    try:
+        message_type = message.get('type')
+        payload = message.get('payload', {})
+        
+        if message_type == 'chat':
+            username = payload.get('username', 'Гість')
+            message_text = payload.get('message', '')
+            player_id = payload.get('player_id')
+            
+            # Знаходимо гравця за ID або ім'ям
+            player = None
+            if player_id:
+                player = next((p for p in self.players if p.id == player_id), None)
+            if not player:
+                player = next((p for p in self.players if p.username == username), None)
+            
+            if not player:
+                await websocket.send_json({
+                    'type': 'error',
+                    'payload': {
+                        'message': 'Гравець не знайдений'
+                    }
+                })
+                return
+            
+            # Відправляємо повідомлення всім гравцям
+            await self.broadcast({
+                'type': 'chat',
+                'payload': {
+                    'username': player.username,
+                    'message': message_text,
+                    'timestamp': datetime.now().isoformat()
+                }
+            })
+            
+        elif message_type == 'ready':
+            player = next((p for p in self.players if p.websocket == websocket), None)
+            if player:
+                player.is_ready = not player.is_ready
+                await self.broadcast({
+                    'type': 'player_ready',
+                    'payload': {
+                        'username': player.username,
+                        'is_ready': player.is_ready
+                    }
+                })
+                
+        elif message_type == 'start_game':
+            if len(self.players) >= self.min_players:
+                await self.start_game()
+            else:
+                await websocket.send_json({
+                    'type': 'error',
+                    'payload': {
+                        'message': 'Недостатньо гравців для початку гри'
+                    }
+                })
+    except Exception as e:
+        print(f"Помилка обробки повідомлення: {str(e)}")
+        await websocket.send_json({
+            'type': 'error',
+            'payload': {
+                'message': f'Помилка обробки повідомлення: {str(e)}'
+            }
+        })
+
+@router.get("/rooms/{room_id}/players")
+async def get_room_players(room_id: int, db: Session = Depends(get_db)):
+    """
+    Отримати список гравців у кімнаті
+    """
+    try:
+        print(f"Getting players for room {room_id}")
+        
+        # Перевіряємо чи існує кімната в базі даних
+        db_room = db.query(Room).filter(Room.id == room_id).first()
+        if not db_room:
+            print(f"Room {room_id} not found in database")
+            raise HTTPException(status_code=404, detail="Кімнату не знайдено")
+
+        # Перевіряємо чи існує кімната в активних кімнатах
+        room = active_rooms.get(room_id)
+        if not room:
+            print(f"Room {room_id} not found in active rooms")
+            # Повертаємо порожній список, якщо кімнати немає в активних
+            return []
+
+        # Формуємо список гравців
+        players_list = []
+        for player in room.players.values():
+            try:
+                player_dict = player.to_dict()
+                players_list.append(player_dict)
+            except Exception as e:
+                print(f"Error converting player to dict: {str(e)}")
+                continue
+
+        print(f"Returning players list for room {room_id}: {players_list}")
+        return players_list
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in get_room_players: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Внутрішня помилка сервера: {str(e)}")
+
+def get_room(room_id: int):
+    return active_rooms.get(room_id)

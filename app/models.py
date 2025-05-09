@@ -43,3 +43,7 @@ class Room(Base):
     max_players_number = Column(Integer, default=6)
     is_private = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.players_number = 0  # Ініціалізуємо кількість гравців як 0
