@@ -10,8 +10,9 @@ from app.config import SECRET_KEY, ALGORITHM
 import random, string
 from app.game_rooms.game_models import GameRoom, Player
 from app.game_rooms.room_storage import active_rooms
-import asyncio
+from dataclasses import asdict
 from app.models import Room
+import asyncio
 
 router = APIRouter(tags=["Rooms"])
 
@@ -125,25 +126,8 @@ async def websocket_endpoint(websocket: WebSocket, room_id: int, db : Session = 
         
 
 
-# async def start_vote_phase(room: GameRoom):
-#     room.phase = "vote"
-#     await room.broadcast(json.dumps({
-#         "type": "phase_change",
-#         "phase": "vote",
-#         "duration": 120  # для фронта — сколько секунд есть
-#     }))
 
-#     await asyncio.sleep(120)
 
-#     # завершаем голосование
-#     room.phase = "waiting"
-#     await room.broadcast(json.dumps({
-#         "type": "phase_ended",
-#         "phase": "vote",
-#         "message": "Голосування завершено"
-#     }))
-
-#     # обрабатываем голоса...  
           
 # Перевірка, чи існує кімната
 async def verify_room(websocket, room_id):
@@ -235,12 +219,13 @@ async def handler_start_game(websocket, payload, room_id, **kwargs):
         return
     
     room.phase = "day"
-    room.assign_roles()
+    room.assign_roles_and_characters()
     
     for player in room.players.values():
         await player.websocket.send_json({
-            "type": "role_assigned",
-            "role": player.role
+            "type": "role_and_character_assigned",
+            "role": player.role,
+            "character": asdict(player.character)
         })
 
     await room.broadcast(json.dumps({
@@ -290,8 +275,19 @@ async def resolve_night(room: GameRoom):
         "detective": None
     }
 
+    await room.generate_mini_event()
+
+    for p in room.players.values():
+        p.is_ready = False
+    
     # Переход к дневной фазе
     room.phase = "day"
+    
+    # генерация супер ивента
+    await asyncio.sleep(1)
+    super_event = await room.generate_super_event()
+    if super_event:
+        await room.broadcast(super_event)
 
 def check_game_end(room: GameRoom):
     mafia_alive = [p for p in room.players.values() if p.role == "mafia" and p.is_alive]
@@ -309,7 +305,7 @@ def check_game_end(room: GameRoom):
 @register_handler("night_action")
 async def night_action(websocket, payload, room_id, db, **kwargs):
     """
-    payload = {
+    payload : {
         "actor_id": int,
         "target_id": int
     }
@@ -345,16 +341,26 @@ async def night_action(websocket, payload, room_id, db, **kwargs):
     # Сохраняем действия
     if actor.role == "mafia":
         room.night_actions["mafia"].append(target.id)
+        print("room.night_actions['mafia'].append(target.id)")
     elif actor.role == "doctor":
         room.night_actions["doctor"] = target.id
+        print("room.night_actions['doctor'] = target.id")
     elif actor.role == "detective":
         room.night_actions["detective"] = target.id
+        print("room.night_actions['detective'] = target.id")
 
     actor.is_ready = True
+    print("actor_is_ready")
 
-    if all(p.is_ready for p in room.players.values() if p.role in {"mafia", "doctor", "detective"} and p.is_alive):
+    active_roles = [p for p in room.players.values() if p.role in {"mafia", "doctor", "detective"} and p.is_alive]
+    print("Active roles and their readiness:")
+    for p in active_roles:
+        print(f"- {p.name} (role: {p.role}, is_ready: {p.is_ready})")
+
+    if active_roles and all(p.is_ready for p in active_roles):
         await resolve_night(room)
-        
+        print("All active players ready — resolving night")
+    
     winner = check_game_end(room)
     if winner:
         await room.broadcast(json.dumps({
@@ -379,13 +385,30 @@ async def night_action(websocket, payload, room_id, db, **kwargs):
             }))
         return
     
-    for p in room.players.values():
-        p.is_ready = False
 
     await room.broadcast(json.dumps({
     "type": "phase_change",
     "phase": "day"
     }))
+    
+# async def start_vote_phase(room: GameRoom):
+#     room.phase = "vote"
+#     await room.broadcast(json.dumps({
+#         "type": "phase_change",
+#         "phase": "vote",
+#         "duration": 120  # для фронта — сколько секунд есть
+#     }))
+
+#     await asyncio.sleep(120)
+
+#     # завершаем голосование
+#     room.phase = "waiting"
+#     await room.broadcast(json.dumps({
+#         "type": "phase_ended",
+#         "phase": "vote",
+#         "message": "Голосування завершено"
+#     }))
+    
     
 @register_handler("vote")
 async def vote(websocket, payload, room_id, db, **kwargs):
@@ -462,7 +485,52 @@ async def vote(websocket, payload, room_id, db, **kwargs):
         
         room.votes = {}
         room.phase = "night"
+        
+        
         await room.broadcast(json.dumps({
             "type": "phase_change",
             "phase": "night"
         }))
+
+
+# @register_handler("set_phase")
+# async def handle_set_phase(websocket, payload, room_id: int, db: Session):
+    # desired_phase = payload.get("phase")
+    # room = await verify_room(websocket, room_id)
+    # if not room:
+    #     await websocket.send_json({
+    #         "type": "error",
+    #         "message": "Кімната не знайдена."
+    #     })
+    #     return
+
+    # player = next((p for p in room.players.values() if p.websocket == websocket), None)
+    # if not player:
+    #     await websocket.send_json({
+    #         "type": "error",
+    #         "message": "Гравець не знайдений."
+    #     })
+    #     return
+
+    # if player.name != room.owner:
+    #     await websocket.send_json({
+    #         "type": "error",
+    #         "message": "Тільки власник кімнати може змінювати фазу вручну."
+    #     })
+    #     return
+
+    # if desired_phase not in room.phases:
+    #     await websocket.send_json({
+    #         "type": "error",
+    #         "message": f"Невідома фаза: {desired_phase}"
+    #     })
+    #     return
+
+    # room.phase = desired_phase
+    # room.phase_index = room.phases.index(desired_phase)
+
+    # await room.broadcast(f"Фаза гри вручну змінена на: {desired_phase}")
+    # await room.broadcast_json({
+    #     "type": "phase_changed",
+    #     "phase": desired_phase
+    # })
