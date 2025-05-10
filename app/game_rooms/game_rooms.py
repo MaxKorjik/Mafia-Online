@@ -10,8 +10,9 @@ from app.config import SECRET_KEY, ALGORITHM
 import random, string
 from app.game_rooms.game_models import GameRoom, Player
 from app.game_rooms.room_storage import active_rooms
-import asyncio
+from dataclasses import asdict
 from app.models import Room
+import asyncio
 
 router = APIRouter(tags=["Rooms"])
 
@@ -235,12 +236,13 @@ async def handler_start_game(websocket, payload, room_id, **kwargs):
         return
     
     room.phase = "day"
-    room.assign_roles()
+    room.assign_roles_and_characters()
     
     for player in room.players.values():
         await player.websocket.send_json({
-            "type": "role_assigned",
-            "role": player.role
+            "type": "role_and_character_assigned",
+            "role": player.role,
+            "character": asdict(player.character)
         })
 
     await room.broadcast(json.dumps({
@@ -290,8 +292,16 @@ async def resolve_night(room: GameRoom):
         "detective": None
     }
 
+    await room.generate_mini_event()
+
     # Переход к дневной фазе
     room.phase = "day"
+    
+    # генерация супер ивента
+    await asyncio.sleep(1)
+    super_event = await room.generate_super_event()
+    if super_event:
+        await room.broadcast(super_event)
 
 def check_game_end(room: GameRoom):
     mafia_alive = [p for p in room.players.values() if p.role == "mafia" and p.is_alive]
@@ -462,7 +472,30 @@ async def vote(websocket, payload, room_id, db, **kwargs):
         
         room.votes = {}
         room.phase = "night"
+        
+        
         await room.broadcast(json.dumps({
             "type": "phase_change",
             "phase": "night"
         }))
+
+
+@register_handler("next_phase")
+async def handle_next_phase(websocket, payload, room_id, **kwargs):
+    room = await verify_room(websocket, room_id)
+    if not room:
+        return
+
+    next_phase = room.next_phase()
+
+    await room.broadcast({
+        "type": "phase_change",
+        "phase": next_phase
+    })
+
+
+    if next_phase == "night":
+        await night_action()
+    elif next_phase == "vote":
+        await vote()
+        

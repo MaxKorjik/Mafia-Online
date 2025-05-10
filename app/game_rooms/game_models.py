@@ -4,15 +4,16 @@ from typing import List, Dict
 from sqlalchemy.orm import Session
 from app.models import Room
 from itertools import count
-
+from app.characters import Surgeon, Teacher, TheaterActor, SciFiWriter,  ExSoldier,  MechanicalEngineer, Agronomist, ChildPsychologist, Pharmacist, Programmer, Event, super_events, mini_events
 from fastapi import WebSocketDisconnect
 from websockets import broadcast
-
+from dataclasses import asdict
 # Клас гравця, що представляє окремого користувача в грі
 class Player:
     def __init__(self, name: str, websocket,  id: int = None):
         self.id : int  = id  # Унікальний ідентифікатор користувача
         self.name: str = name  # Ім'я гравця
+        self.character = None
         self.websocket = websocket  # WebSocket з'єднання
         self.role: str = "citizen"  # Роль у грі за замовчуванням — мирний житель
         self.have_resist : bool = False  # Чи є захист від вбивства
@@ -26,6 +27,7 @@ class Player:
             "id" : self.id,
             "name": self.name,
             "role": self.role,
+            "character": asdict(self.character),
             "is_alive": self.is_alive,
             "is_sleeping": self.is_sleeping,
             "is_ready": self.is_ready
@@ -43,7 +45,9 @@ class GameRoom:
         self.min_players = min_players
         self.max_players = max_players  # Максимальна кількість гравців
         self.is_private = is_private  # Приватність кімнати
-        self.phase = "waiting"  # Поточна фаза гри
+        self.phases = ["waiting", "day", "vote", "night"]
+        self.phase_index = 0
+        self.phase = self.phases[self.phase_index]
         self.round = 0  # Лічильник раундів
         self.lock = asyncio.Lock()  # Блокування для асинхронних операцій
         self.night_actions = {
@@ -51,6 +55,8 @@ class GameRoom:
                 "doctor": None,
                 "detective": None
             }
+        self.event_history = []
+        self.event_generated = False
         self.votes: Dict[int, int] = {}
         self.is_game_over = False
         
@@ -99,18 +105,19 @@ class GameRoom:
             self.remove_player(name)
                 
     # Призначаємо ролі гравцям випадковим чином
-    def assign_roles(self):
+    def assign_roles_and_characters(self):
         roles = ["mafia", "mafia", "doctor", "detective"]  # Наявні спеціальні ролі
+        characters = [Surgeon, Teacher, TheaterActor, SciFiWriter,  ExSoldier,  MechanicalEngineer, Agronomist, ChildPsychologist, Pharmacist, Programmer]
         default_role = "citizen"  # Роль за замовчуванням
         
         players_list = list(self.players.values())
         random.shuffle(players_list)  # Перемішуємо гравців для випадкового розподілу ролей
 
+        assigned_characters = random.sample(characters, len(players_list))
+
         for i, player in enumerate(players_list):
-            if i < len(roles):
-                player.role = roles[i]  # Призначаємо спеціальну роль
-            else:
-                player.role = default_role  # Інші гравці — мирні жителі
+            player.role = roles[i] if i < len(roles) else default_role
+            player.character = assigned_characters[i]()
                 
     def kill_player(self, player_id):
         for p in self.players.values():
@@ -118,3 +125,59 @@ class GameRoom:
                 p.is_alive = False
                 break
 
+    async def generate_super_event(self):
+        if self.phase != "night" or self.event_generated:
+            return None
+        self.event_generated = True 
+        
+        
+        is_super_event = random.random() < 0.25 # Супер івент - івент який може прямо вказати на вбивцю
+        is_real = random.random() < 0.6 # Чи реальноо - прапорець який визначае з яким шансом супер івент буде вказувати на правильного гравця
+
+        if is_super_event:
+            if is_real:
+                mafia_players = [p for p in self.players.values() if p.role == "mafia"]
+                if not mafia_players:
+                    return None
+                target = random.choice(mafia_players)
+            else:
+                innocent_players = [p for p in self.players.values() if p.role != "mafia"]
+                if not innocent_players:
+                    return None
+                target = random.choice(innocent_players)
+                
+            character_name = target.character.name if target.character else None
+            matched_events = [e for e in super_events if e.related_to == character_name]
+            
+            
+            if matched_events:
+                selected_event = random.choice(matched_events)
+                self.event_history.append(selected_event.description)
+                return {
+                    "type": "super_event",
+                    "description": selected_event.description
+                }
+                
+        return None
+    
+    async def generate_mini_event(self):
+        if self.phase == "night":
+
+            if random.random() < 0.8: # Звичайний івент по типу "Почув шелест/розмову вночі"
+                observer = random.choice(list(self.players.values()))
+                flavor = random.choice(mini_events)
+                self.event_history.append(flavor)
+                await observer.websocket.send_json({
+                    "type": "mini_event",
+                    "mini_event": flavor
+                })
+                
+                
+                
+    def next_phase(self):
+        if self.phase == "waiting":
+            self.phase_index = 1  # skip to "day"
+        else:
+            self.phase_index = (self.phase_index + 1) % len(self.phases[1:])
+        self.phase = self.phases[self.phase_index]
+        return self.phase
