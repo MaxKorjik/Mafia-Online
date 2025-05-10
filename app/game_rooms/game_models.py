@@ -181,3 +181,4 @@ class GameRoom:
             self.phase_index = (self.phase_index + 1) % len(self.phases[1:])
         self.phase = self.phases[self.phase_index]
         return self.phase
+
