@@ -480,22 +480,44 @@ async def vote(websocket, payload, room_id, db, **kwargs):
         }))
 
 
-@register_handler("next_phase")
-async def handle_next_phase(websocket, payload, room_id, **kwargs):
+@register_handler("set_phase")
+async def handle_set_phase(websocket, payload, room_id: int, db: Session):
+    desired_phase = payload.get("phase")
     room = await verify_room(websocket, room_id)
     if not room:
+        await websocket.send_json({
+            "type": "error",
+            "message": "Кімната не знайдена."
+        })
         return
 
-    next_phase = room.next_phase()
+    player = next((p for p in room.players.values() if p.websocket == websocket), None)
+    if not player:
+        await websocket.send_json({
+            "type": "error",
+            "message": "Гравець не знайдений."
+        })
+        return
 
-    await room.broadcast({
-        "type": "phase_change",
-        "phase": next_phase
+    if player.name != room.owner:
+        await websocket.send_json({
+            "type": "error",
+            "message": "Тільки власник кімнати може змінювати фазу вручну."
+        })
+        return
+
+    if desired_phase not in room.phases:
+        await websocket.send_json({
+            "type": "error",
+            "message": f"Невідома фаза: {desired_phase}"
+        })
+        return
+
+    room.phase = desired_phase
+    room.phase_index = room.phases.index(desired_phase)
+
+    await room.broadcast(f"Фаза гри вручну змінена на: {desired_phase}")
+    await room.broadcast_json({
+        "type": "phase_changed",
+        "phase": desired_phase
     })
-
-
-    if next_phase == "night":
-        await night_action()
-    elif next_phase == "vote":
-        await vote()
-        
