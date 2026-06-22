@@ -1,0 +1,13 @@
+@import './base.css';
+
+#app {
+  width: 100%;
+  margin: 0 auto;
+  font-weight: normal;
+}
+
+/* Ссылки можно оставить, если они тебе нужны глобально, или перенести в theme.css */
+a {
+  text-decoration: none;
+  transition: 0.4s;
+}

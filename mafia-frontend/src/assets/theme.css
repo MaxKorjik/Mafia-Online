@@ -1,0 +1,239 @@
+:root {
+  /* Основні кольори */
+  --primary-color: #4a90e2;
+  --primary-color-dark: #357abd;
+  --secondary-color: #2c3e50;
+  --accent-color: #e74c3c;
+  
+  /* Кольори фону */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f6fa;
+  --bg-tertiary: #e9ecef;
+  
+  /* Кольори тексту */
+  --text-primary: #2c3e50;
+  --text-secondary: #6c757d;
+  --text-light: #ffffff;
+  
+  /* Кольори для статусів */
+  --success-color: #2ecc71;
+  --warning-color: #f1c40f;
+  --error-color: #e74c3c;
+  --info-color: #3498db;
+  
+  /* Кольори для темної теми */
+  --dark-bg-primary: #1a1a1a;
+  --dark-bg-secondary: #2d2d2d;
+  --dark-bg-tertiary: #3d3d3d;
+  --dark-text-primary: #ffffff;
+  --dark-text-secondary: #b3b3b3;
+  
+  /* Тіні */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.12);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  
+  /* Розміри */
+  --border-radius-sm: 4px;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+  
+  /* Відступи */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  
+  /* Шрифти */
+  --font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.5rem;
+  --font-size-xxl: 2rem;
+  
+  /* Анімації */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 350ms ease;
+  
+  --font-main: 'Montserrat', 'Arial', sans-serif;
+  --transition: 0.25s cubic-bezier(.4,2,.6,1);
+  /* DARK THEME */
+  --color-bg: #0a0a0f;
+  --color-card: #18181e;
+  --color-accent: #d32f2f;
+  --color-accent-glow: #ff1744;
+  --color-text: #fff;
+  --color-secondary: #23232b;
+  --color-border: #2c2c38;
+  --color-success: #43a047;
+  --color-danger: #e53935;
+  --color-shadow: 0 4px 32px #d32f2f33;
+  --color-glow: 0 0 16px #ff1744cc;
+  --color-owner: linear-gradient(90deg, #ffd600, #ff1744);
+  --color-dead: #444;
+  --color-chat-system: #ff1744;
+  --color-chat-bg: #18181e;
+  --color-btn: linear-gradient(90deg, #d32f2f, #ff1744);
+  --color-btn-hover: linear-gradient(90deg, #ff1744, #d32f2f);
+  --color-btn-text: #fff;
+  --color-avatar: linear-gradient(135deg, #d32f2f, #ff1744 80%);
+}
+
+/* Темна тема */
+[data-theme="dark"] {
+  --bg-primary: var(--dark-bg-primary);
+  --bg-secondary: var(--dark-bg-secondary);
+  --bg-tertiary: var(--dark-bg-tertiary);
+  --text-primary: var(--dark-text-primary);
+  --text-secondary: var(--dark-text-secondary);
+  
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.4);
+}
+
+/* Загальні стилі */
+body {
+  font-family: var(--font-family);
+  font-size: var(--font-size-md);
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
+  line-height: 1.5;
+  margin: 0;
+  padding: 0;
+}
+
+/* Кнопки */
+.btn {
+  display: inline-block;
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border: none;
+  border-radius: var(--border-radius-sm);
+  background-color: var(--primary-color);
+  color: var(--text-light);
+  font-size: var(--font-size-md);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.btn:hover {
+  background-color: var(--primary-color-dark);
+}
+
+.btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Форми */
+.input {
+  width: 100%;
+  padding: var(--spacing-sm);
+  border: 1px solid var(--bg-tertiary);
+  border-radius: var(--border-radius-sm);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  transition: border-color var(--transition-fast);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+/* Картки */
+.card {
+  background-color: var(--bg-secondary);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Заголовки */
+h1, h2, h3, h4, h5, h6 {
+  margin: 0;
+  color: var(--text-primary);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+h1 { font-size: var(--font-size-xxl); }
+h2 { font-size: var(--font-size-xl); }
+h3 { font-size: var(--font-size-lg); }
+h4 { font-size: var(--font-size-md); }
+h5 { font-size: var(--font-size-sm); }
+h6 { font-size: var(--font-size-xs); }
+
+/* Посилання */
+a {
+  color: var(--primary-color);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover {
+  color: var(--primary-color-dark);
+}
+
+/* Списки */
+ul, ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Контейнери */
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--spacing-md);
+}
+
+/* Сітки */
+.grid {
+  display: grid;
+  gap: var(--spacing-md);
+}
+
+/* Адаптивність */
+@media (max-width: 768px) {
+  :root {
+    --spacing-xl: 1.5rem;
+    --font-size-xxl: 1.75rem;
+    --font-size-xl: 1.25rem;
+  }
+  
+  .container {
+    padding: 0 var(--spacing-sm);
+  }
+}
+
+/* LIGHT THEME */
+[data-theme='light'] {
+  --color-bg: #f5f7fa;
+  --color-card: #fff;
+  --color-accent: #1976d2;
+  --color-accent-glow: #64b5f6;
+  --color-text: #222;
+  --color-secondary: #e3eaf2;
+  --color-border: #b0bec5;
+  --color-success: #1976d2;
+  --color-danger: #e53935;
+  --color-shadow: 0 4px 32px #1976d233;
+  --color-glow: 0 0 16px #64b5f6cc;
+  --color-owner: linear-gradient(90deg, #64b5f6, #1976d2);
+  --color-dead: #b0bec5;
+  --color-chat-system: #1976d2;
+  --color-chat-bg: #fff;
+  --color-btn: linear-gradient(90deg, #1976d2, #64b5f6);
+  --color-btn-hover: linear-gradient(90deg, #64b5f6, #1976d2);
+  --color-btn-text: #fff;
+  --color-avatar: linear-gradient(135deg, #1976d2, #64b5f6 80%);
+} 
