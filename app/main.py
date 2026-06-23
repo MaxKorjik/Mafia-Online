@@ -19,7 +19,7 @@ app = FastAPI(title="Mafia Game")
 # Налаштування CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:4173"],  # URL вашого фронтенду
+    allow_origins=["*"],  # URL вашого фронтенду
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
