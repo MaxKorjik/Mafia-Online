@@ -42,7 +42,7 @@ class Player:
         
 # Клас кімнати гри
 class GameRoom:
-    def __init__(self, id, name, owner_id, min_players=6, max_players=10):
+    def __init__(self, id, name, owner_id, min_players=6, max_players=10, is_private = False):
         self.id = id
         self.name = name
         self.owner = owner_id
@@ -52,7 +52,7 @@ class GameRoom:
         self.phase = "waiting"  # waiting, night, day
         self.round = 0
         self.is_game_over = False
-        self.is_private = False
+        self.is_private = is_private
         self.night_actions = {
             "mafia": [],
             "doctor": None,

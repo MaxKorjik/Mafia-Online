@@ -91,7 +91,7 @@ const handleRegister = async () => {
     loading.value = true
     error.value = ''
     
-    await axios.post('http://localhost:8000/auth/register', {
+    await axios.post(`${import.meta.env.VITE_API_URL}/auth/register`, {
       username: username.value,
       email: email.value,
       password: password.value

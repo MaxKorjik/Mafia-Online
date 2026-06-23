@@ -19,7 +19,7 @@ app = FastAPI(title="Mafia Game")
 # Налаштування CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # URL вашого фронтенду
+    allow_origins=["http://localhost:5173", "http://localhost:4173"],  # URL вашого фронтенду
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -105,7 +105,6 @@ async def create_room(
             owner_id=owner_id,
             min_players=db_room.min_players_number,
             max_players=db_room.max_players_number,
-            is_private=db_room.is_private,
         )
         
         print(f"Created game_room object: {game_room.__dict__}")

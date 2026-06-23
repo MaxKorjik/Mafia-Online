@@ -193,18 +193,18 @@
         </div>
       </div>
     </div>
-  </div>
-  <div class="notifications-container">
-    <transition-group name="toast">
-      <div 
-        v-for="notif in notifications" 
-        :key="notif.id" 
-        class="toast" 
-        :class="notif.type"
-      >
-        {{ notif.message }}
-      </div>
-    </transition-group>
+    <div class="notifications-container">
+      <transition-group name="toast">
+        <div 
+          v-for="notif in notifications" 
+          :key="notif.id" 
+          class="toast" 
+          :class="notif.type"
+        >
+          {{ notif.message }}
+        </div>
+      </transition-group>
+    </div>
   </div>
 </template>
 
@@ -389,7 +389,9 @@ const connectWebSocket = () => {
     return
   }
 
-  const wsUrl = `ws://localhost:8000/api/ws/room/${route.params.id}?token=${token}`
+  const backendHost = import.meta.env.VITE_API_URL.replace(/^https?:\/\//, '')
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const wsUrl = `${wsProtocol}//${backendHost}/api/ws/room/${route.params.id}?token=${token}`
   console.log('Attempting WebSocket connection to:', wsUrl)
   
   try {

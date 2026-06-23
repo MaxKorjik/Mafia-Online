@@ -17,7 +17,8 @@ export const useAuthStore = defineStore('auth', {
   actions: {
     async login(username, password) {
       try {
-        const response = await axios.post('http://localhost:8000/auth/login', {
+        // Меняем только адрес, тело запроса оставляем как у тебя и было
+        const response = await axios.post(`${import.meta.env.VITE_API_URL}/auth/login`, {
           username,
           password
         }, {
@@ -30,8 +31,8 @@ export const useAuthStore = defineStore('auth', {
         this.token = token
         localStorage.setItem('token', token)
         
-        // Отримуємо дані користувача
-        const userResponse = await axios.get('http://localhost:8000/api/profile', {
+        // Тут тоже просто меняем адрес на переменную
+        const userResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/profile`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -51,7 +52,7 @@ export const useAuthStore = defineStore('auth', {
 
     async register(username, email, password) {
       try {
-        const response = await axios.post('http://localhost:8000/auth/register', {
+        const response = await api.post('/auth/register', {
           username,
           email,
           password
@@ -62,7 +63,7 @@ export const useAuthStore = defineStore('auth', {
         localStorage.setItem('token', token)
         
         // Отримуємо дані користувача
-        const userResponse = await axios.get('http://localhost:8000/api/profile', {
+        const userResponse = await api.get('/api/profile', {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -83,12 +84,13 @@ export const useAuthStore = defineStore('auth', {
     async logout() {
       try {
         if (this.token) {
-          await axios.post('http://localhost:8000/auth/logout', {}, {
+          await api.post('/auth/logout', {}, {
             headers: {
               'Authorization': `Bearer ${this.token}`
             }
           })
         }
+
       } catch (error) {
         console.error('Logout error:', error)
       } finally {
@@ -105,7 +107,7 @@ export const useAuthStore = defineStore('auth', {
       try {
         if (!this.token) return null
         
-        const response = await axios.get('http://localhost:8000/api/profile', {
+        const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/profile`, {
           headers: {
             'Authorization': `Bearer ${this.token}`
           }
