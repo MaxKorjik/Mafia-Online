@@ -503,7 +503,7 @@ async def vote(websocket: WebSocket, payload: dict, db: Session, player: Player,
         
 # Змінюємо статус готовності
 @register_handler("toggle_ready")
-async def handle_toggle_ready(payload: dict, db: Session, room: GameRoom, player: Player, **kwargs):
+async def handle_toggle_ready( payload: dict, db: Session, room: GameRoom, player: Player, **kwargs):
     # Змінюємо статус готовності
     player.is_ready = not player.is_ready
     print(f"Player {player.id} ready state changed to {player.is_ready}")
@@ -528,7 +528,63 @@ async def handle_toggle_ready(payload: dict, db: Session, room: GameRoom, player
             "message": "Всі гравці готові до початку гри!"
         })
 
+# Обробка вигнання гравця з кімнати (Kick)
+@register_handler("kick_player")
+async def handle_kick_player(websocket: WebSocket, payload: dict, player: Player, room: GameRoom, **kwargs):
+    """
+    payload = {
+        "player_id": int
+    }
+    """
+    # 1. Перевіряємо, чи є той, хто натиснув кнопку, власником кімнати
+    if room.owner != player.id:
+        await websocket.send_json({
+            "type": "error",
+            "message": "Тільки власник кімнати може виганяти гравців"
+        })
+        return
 
+    target_id = payload.get("player_id")
+    if not target_id:
+        return
+
+    target_id = int(target_id)
+    
+    # 2. Не дозволяємо власнику вигнати самого себе
+    if target_id == player.id:
+        await websocket.send_json({
+            "type": "error",
+            "message": "Ви не можете вигнати самого себе"
+        })
+        return
+
+    # 3. Шукаємо цільового гравця в кімнаті
+    target_player = room.players.get(target_id)
+    if not target_player:
+        await websocket.send_json({
+            "type": "error",
+            "message": "Гравця не знайдено в кімнаті"
+        })
+        return
+
+    # 4. Надсилаємо вигнаному гравцю індивідуальне сповіщення про кік
+    try:
+        await target_player.websocket.send_json({
+            "type": "you_were_kicked"
+        })
+        # Закриваємо його сокет. Це автоматично викличе виняток WebSocketDisconnect у його циклі.
+        # Твій блок `except WebSocketDisconnect` сам видалить його з active_rooms та розішле всім оновлений список!
+        await target_player.websocket.close(code=1000)
+    except Exception as e:
+        print(f"Помилка при закритті сокета вигнаного гравця {target_id}: {str(e)}")
+
+    # 5. Оповіщаємо чат системи, що гравця вигнали
+    await room.broadcast({
+        "type": "system",
+        "message": f"Гравця {target_player.name} було вигнано з кімнати власником."
+    })
+    
+    
 # Швидке повернення списку гравців в активній кімнаті для фронтенду
 @router.get("/rooms/{room_id}/players")
 async def get_room_players(room_id: int):

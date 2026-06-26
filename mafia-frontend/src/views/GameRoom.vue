@@ -24,25 +24,10 @@
               {{ player.id }}
             </div>
             <div class="player-info">
-              <span class="player-name">{{ player.username || 'Unknown' }}</span>
-              <!-- <div class="player-status">
-                <span v-if="player.is_owner" class="owner-badge" title="Власник">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M2 19h20M4 19l2-8h12l2 8M7 11V7a5 5 0 0 1 10 0v4" stroke="#ff1744" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><ellipse cx="12" cy="7" rx="3" ry="2" fill="#ffd600"/></svg>
-                  Власник
-                </span>
-                
-                <span v-if="player.is_ready && (!isGameStarted || gamePhase !== 'night')" class="ready-badge" title="Готовий">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#43a047"/><path d="M8 12l2 2l4-4" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  Готовий
-                </span>
-
-                <span v-if="!player.is_alive" class="dead-badge" title="Мертвий">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#e53935"/><path d="M9 9l6 6M15 9l-6 6" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
-                  Мертвий
-                </span>
-              </div> -->
+              <span class="player-name">{{ player.name || player.username || 'Unknown' }}</span>
+              
               <div class="player-status">
-                <span v-if="player.id === room.owner_id || player.is_owner" class="owner-badge" title="Власник" style="display: inline-flex; align-items: center; gap: 4px;">
+                <span v-if="player.id === room.owner || player.is_owner" class="owner-badge" title="Власник" style="display: inline-flex; align-items: center; gap: 4px;">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M2 19h20M4 19l2-8h12l2 8M7 11V7a5 5 0 0 1 10 0v4" stroke="#ff1744" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><ellipse cx="12" cy="7" rx="3" ry="2" fill="#ffd600"/></svg>
                   Власник
                 </span>
@@ -58,6 +43,13 @@
                 </span>
               </div>
             </div>
+            <button 
+              v-if="isOwner && player.id !== currentUserId && !isGameStarted" 
+              @click="kickPlayer(player.id)" 
+              class="kick-button" 
+              title="Вигнати гравця">
+              ❌
+            </button>
           </div>
         </div>
       </div>
@@ -151,7 +143,7 @@
           <h4>Інші мафійники:</h4>
           <ul>
             <li v-for="mafia in otherMafia" :key="mafia.id">
-              {{ mafia.name }}
+              {{ mafia.name || mafia.username }}
             </li>
           </ul>
         </div>
@@ -169,7 +161,7 @@
             class="vote-option" 
             @click="vote(player.id)">
             <div class="vote-option-avatar">{{ player.id }}</div>
-            <div class="vote-option-name">{{ player.name }}</div>
+            <div class="vote-option-name">{{ player.name || player.username }}</div>
           </div>
         </div>
         <button @click="showVoteModal = false" class="button secondary">Скасувати</button>
@@ -241,6 +233,26 @@ const isLeaving = ref(false)
 
 const notifications = ref([])
 let notifId = 0
+
+const currentUserId = computed(() => parseInt(localStorage.getItem('userId')));
+
+const kickPlayer = (playerId) => {
+  if (!confirm('Ви впевнені, що хочете вигнати цього гравця з кімнати?')) return;
+
+  const message = {
+    type: 'kick_player',
+    payload: {
+      player_id: playerId
+    }
+  };
+  
+  if (ws.value && ws.value.readyState === WebSocket.OPEN) {
+    ws.value.send(JSON.stringify(message));
+  } else {
+    showNotification('Помилка: WebSocket не підключено', 'error');
+  }
+};
+
 
 const showNotification = (message, type = 'info') => {
   const id = notifId++
@@ -397,15 +409,15 @@ const connectWebSocket = () => {
   try {
     ws.value = new WebSocket(wsUrl)
     
-    ws.value.onopen = () => {
+    ws.value.onopen = async () => {
       console.log('WebSocket connected successfully')
       reconnectAttempts.value = 0
       if (reconnectTimeout.value) {
         clearTimeout(reconnectTimeout.value)
         reconnectTimeout.value = null
       }
-      fetchRoom()
-      fetchPlayers()
+      await fetchRoom()
+      await fetchPlayers()
       fetchMessages()
     }
     
@@ -487,6 +499,15 @@ const handleWebSocketMessage = (event) => {
         
         // (Опционально) Можно обновить локальное состояние фазы, чтобы заблокировать кнопки действий
         // gamePhase.value = 'game_over'
+        break;
+
+      case 'you_were_kicked':
+        showNotification('Вас було вигнано з кімнати власником', 'error');
+        isLeaving.value = true;
+        if (ws.value) {
+          ws.value.close(1000);
+        }
+        router.push('/rooms');
         break;
 
       case 'roles_reveal':
@@ -777,7 +798,7 @@ const vote = async (targetId) => {
     const message = {
       type: 'vote',
       payload: {
-        player_id: localStorage.getItem('userId'),
+        player_id: parseInt(localStorage.getItem('userId')),
         target_id: targetId
       }
     }
@@ -1362,5 +1383,37 @@ onUnmounted(() => {
 
 .action-option-name {
   font-weight: 500;
+}
+
+.kick-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.2rem;
+  padding: 8px;
+  margin-left: auto; /* Притискає кнопку до правого краю картки */
+  transition: transform 0.2s ease;
+  opacity: 0.7;
+}
+
+.kick-button:hover {
+  transform: scale(1.2);
+  opacity: 1;
+}
+
+/* Робимо так, щоб текст не наїжджав на кнопку */
+.player-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0; 
+  overflow: hidden;
+}
+
+.player-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

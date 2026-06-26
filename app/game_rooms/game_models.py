@@ -29,7 +29,6 @@ class Player:
             "is_ready": self.is_ready,
             "is_alive": self.is_alive,
             "role": self.role,
-            "is_owner": False  # Буде встановлено в GameRoom
         }
     
     def reset(self):
@@ -72,9 +71,9 @@ class GameRoom:
     def remove_player(self, player_id):
         if player_id in self.players:
             del self.players[player_id]
-            if self.owner == player_id and self.players:
-                self.owner = next(iter(self.players))
-                print(f"New owner is {self.owner}")
+            # if self.owner == player_id and self.players:
+            #     self.owner = next(iter(self.players))
+            #     print(f"New owner is {self.owner}")
             print(f"Removed player {player_id} from room {self.id}")
             return True
         return False
