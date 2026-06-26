@@ -235,11 +235,11 @@ async def handler_start_game(websocket: WebSocket, payload: dict, player: Player
                     "role": player.role
             }
             
-            if player.role == "mafia":
+            if player.role == "mafia" or player.role == "mafia_don":
                 other_mafia = [
                     {"id": p.id, "name": p.name}
                     for p in room.players.values()
-                    if p.role == "mafia" and p.id != player.id
+                    if (p.role == "mafia" or p.role == "mafia_don") and p.id != player.id
                 ]
                 role_info["other_mafia"] = other_mafia
             
@@ -279,7 +279,12 @@ async def resolve_night(room: GameRoom, db: Session ):
     # 1. Определяем жертву мафии (подсчитываем голоса)
     victim = None
     if mafia_targets:
-        victim_id = max(set(mafia_targets), key=mafia_targets.count)
+        don = next((p for p in room.players.values() if p.role == "mafia_don" and p.is_alive), None)
+        if don and don.id in mafia_targets:
+            victim_id = mafia_targets[don.id]
+        else:
+            targets_list = list(mafia_targets.values())
+            victim_id = max(set(targets_list), key=targets_list.count)
         victim = room.players.get(victim_id)
 
     # 2. Применяем ночные действия (убийство или спасение доктором)
@@ -305,12 +310,12 @@ async def resolve_night(room: GameRoom, db: Session ):
                 await detective.websocket.send_json({
                     "type": "investigation_result",
                     "target": checked.name,
-                    "is_mafia": checked.role == "mafia"
+                    "is_mafia": (checked.role == "mafia" or checked.role == "mafia_don")
                 })
 
     # 4. Очищаем ночные действия и сбрасываем готовность для следующего раунда
     room.night_actions = {
-        "mafia": [],
+        "mafia": {},
         "doctor": None,
         "detective": None
     }
@@ -372,6 +377,10 @@ async def night_action(websocket: WebSocket, payload: dict, db: Session, room_id
         await websocket.send_json({"type": "error", "message": "Мертвий гравець не може діяти"})
         return
     
+    # Anticlicker
+    if player.is_ready:
+        return
+    
     target_id = payload.get("target_id")
     target = room.get_player(target_id)
 
@@ -380,8 +389,8 @@ async def night_action(websocket: WebSocket, payload: dict, db: Session, room_id
         return
 
     # Сохраняем действия
-    if player.role == "mafia":
-        room.night_actions["mafia"].append(target.id)
+    if player.role in ["mafia", "mafia_don"]:
+        room.night_actions["mafia"][player.id] = target.id
     elif player.role == "doctor":
         room.night_actions["doctor"] = target.id
     elif player.role == "detective":
@@ -391,7 +400,7 @@ async def night_action(websocket: WebSocket, payload: dict, db: Session, room_id
 
     # Проверяем готовность только специальных ролей (мафия, доктор, детектив)
     special_players = [p for p in room.players.values() 
-                      if p.role in ["mafia", "doctor", "detective"] and p.is_alive]
+                      if p.role in ["mafia", "mafia_don", "doctor", "detective"] and p.is_alive]
     
     if all(p.is_ready for p in special_players):
         print("Всі нічні дії виконані, переходимо до розв'язання ночі...")

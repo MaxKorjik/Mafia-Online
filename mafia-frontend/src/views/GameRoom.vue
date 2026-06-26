@@ -27,7 +27,7 @@
               <span class="player-name">{{ player.name || player.username || 'Unknown' }}</span>
               
               <div class="player-status">
-                <span v-if="player.id === room.owner || player.is_owner" class="owner-badge" title="Власник" style="display: inline-flex; align-items: center; gap: 4px;">
+                <span v-if="player.id == room.owner || player.is_owner" class="owner-badge" title="Власник" style="display: inline-flex; align-items: center; gap: 4px;">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M2 19h20M4 19l2-8h12l2 8M7 11V7a5 5 0 0 1 10 0v4" stroke="#ff1744" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><ellipse cx="12" cy="7" rx="3" ry="2" fill="#ffd600"/></svg>
                   Власник
                 </span>
@@ -134,12 +134,13 @@
         <h3>Ваша роль</h3>
         <p class="role-name">{{ 
           myRole === 'mafia' ? 'Мафія' : 
+          myRole === 'mafia_don' ? 'Мафія Дон' : 
           myRole === 'doctor' ? 'Лікар' : 
           myRole === 'detective' ? 'Детектив' : 
           'Мирний житель' 
         }}</p>
         
-        <div v-if="myRole === 'mafia' && otherMafia.length > 0" class="other-mafia">
+        <div v-if="['mafia', 'mafia_don'].includes(myRole) && otherMafia.length > 0" class="other-mafia">
           <h4>Інші мафійники:</h4>
           <ul>
             <li v-for="mafia in otherMafia" :key="mafia.id">
@@ -171,7 +172,8 @@
     <div v-if="showNightActionModal && amIAlive && !showRoleModal" class="modal">
       <div class="modal-content">
         <h3>{{ 
-          myRole === 'mafia' ? 'Виберіть жертву' : 
+          myRole === 'mafia'  ? 'Виберіть жертву' : 
+          myRole === 'mafia_don'  ? 'Виберіть жертву' : 
           myRole === 'doctor' ? 'Виберіть кого лікувати' : 
           'Виберіть кого перевірити' 
         }}</h3>
@@ -308,7 +310,7 @@ const amIAlive = computed(() => {
 const canPerformNightAction = computed(() => {
     if (gamePhase.value !== 'night') return false
     if (!myRole.value) return false
-    return ['mafia', 'doctor', 'detective'].includes(myRole.value)
+    return ['mafia','mafia_don', 'doctor', 'detective'].includes(myRole.value)
 })
 
 const canVote = computed(() => {
@@ -344,7 +346,7 @@ const fetchPlayers = async () => {
     const response = await api.get(`/api/rooms/${route.params.id}/players`)
     players.value = response.data.map(player => ({
       ...player,
-      is_owner: player.id === room.value.owner,
+      is_owner: player.id == room.value.owner,
       is_alive: player.is_alive ?? true
     }))
     console.log('Players data:', players.value)
@@ -518,6 +520,7 @@ const handleWebSocketMessage = (event) => {
           // Переводим роли на понятный язык с эмодзи
           let roleEmoji = '👨‍🌾 Мирний'
           if (p.role === 'mafia') roleEmoji = '🔫 Мафія'
+          if (p.role === 'mafia_don') roleEmoji = '🔫 Мафія Дон'
           if (p.role === 'doctor') roleEmoji = '🩺 Лікар'
           if (p.role === 'detective') roleEmoji = '🔎 Комісар'
           
@@ -593,9 +596,9 @@ const handleWebSocketMessage = (event) => {
         myRole.value = data.role;
         showRoleModal.value = true;
         
-        if (data.role === 'mafia' && data.other_mafia) {
-          otherMafia.value = data.other_mafia;
-        }
+        if (['mafia', 'mafia_don'].includes(data.role) && data.other_mafia) {
+            otherMafia.value = data.other_mafia;
+          }
         
         const roleMessage = {
           type: 'personal',
@@ -622,7 +625,7 @@ const handleWebSocketMessage = (event) => {
         currentRound.value = data.round;
         
         if (data.phase === 'night') {
-          if (['mafia', 'doctor', 'detective'].includes(myRole.value)) {
+          if (['mafia','mafia_don', 'doctor', 'detective'].includes(myRole.value)) {
             showNightActionModal.value = true;
           }
         }
@@ -818,13 +821,7 @@ onMounted(() => {
   console.log('Component mounted')
   connectWebSocket()
   fetchMessages()
-  
-  updateInterval.value = setInterval(() => {
-    if (route.params.id) {
-      console.log('Update interval tick')
-      fetchRoom()
-    }
-  }, 5000)
+  fetchRoom()
 })
 
 onUnmounted(() => {

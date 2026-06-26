@@ -53,7 +53,7 @@ class GameRoom:
         self.is_game_over = False
         self.is_private = is_private
         self.night_actions = {
-            "mafia": [],
+            "mafia": {},
             "doctor": None,
             "detective": None
         }
@@ -118,8 +118,8 @@ class GameRoom:
     
     def check_victory(self):
         if not self.is_game_over:
-            mafia_count = sum(1 for p in self.players.values() if p.is_alive and p.role == "mafia")
-            civilians_count = sum(1 for p in self.players.values() if p.is_alive and p.role != "mafia")
+            mafia_count = sum(1 for p in self.players.values() if p.is_alive and p.role in ["mafia", "mafia_don"])
+            civilians_count = sum(1 for p in self.players.values() if p.is_alive and p.role not in ["mafia", "mafia_don"])
             
             print(f"Victory check: mafia={mafia_count}, civilians={civilians_count}")
             
@@ -153,7 +153,7 @@ class GameRoom:
         self.round = 1
         self.is_game_over = False
         self.night_actions = {
-            "mafia": [],
+            "mafia": {},
             "doctor": None,
             "detective": None
         }
@@ -172,7 +172,7 @@ class GameRoom:
 
     def assign_roles(self):
         print(f"Assigning roles in room {self.id}...")
-        roles = ["mafia", "mafia", "doctor", "detective", "civilian", "civilian"]
+        roles = ["mafia", "mafia_don", "doctor", "detective", "civilian", "civilian"]
         random.shuffle(roles)
         
         players_list = list(self.players.values())
