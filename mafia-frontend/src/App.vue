@@ -35,8 +35,8 @@ import Navbar from '@/components/Navbar.vue'
 /* Оновлений контейнер-обгортка для всього сайту */
 .content-wrapper {
   width: 100%;
-  max-width: 1200px; /* На ПК контент не розповзеться ширше ніж 1200px */
-  margin: 0 auto;    /* Центрує весь контент сторінок по центру екрану */
+  /* max-width: 1200px;  
+  margin: 0 auto;     */
   padding: 0 1.5rem; /* Безпечні відступи з боків для планшетів та мобілок */
   box-sizing: border-box;
 }

@@ -96,11 +96,20 @@
 
       <button 
         v-if="!isGameStarted"
-        @click="toggleReady" 
-        class="button"
+        @mousedown="startHold"
+        @mouseup="handleMouseUp"
+        @mouseleave="cancelHold"
+        @touchstart="startHold"
+        @touchend="handleMouseUp"
+        @click="handleClick"
+        class="button hold-button"
         :class="{ 'ready': isReady }"
       >
-        {{ isReady ? 'Готовий' : 'Готуватися' }}
+        <div v-if="!isReady" class="hold-progress" :style="{ width: progress + '%' }"></div>
+        
+        <span class="button-text">
+          {{ isReady ? 'Готовий (Натисніть, щоб скасувати)' : 'Затисніть для готовності' }}
+        </span>
       </button>
 
       <button 
@@ -232,6 +241,111 @@ const showRoleModal = ref(false)
 const showVoteModal = ref(false)
 const showNightActionModal = ref(false)
 const isLeaving = ref(false)
+
+const progress = ref(0)
+let holdTimer = null
+let progressInterval = null
+const HOLD_DURATION = 1500 // 1.5 секунды
+
+// Тот самый предохранитель от ложного клика при отпускании руки
+let wasHoldCompleted = false
+
+const startHold = (e) => {
+  if (isReady.value) return
+  
+  if (e.type === 'touchstart') e.preventDefault()
+
+  progress.value = 0
+  wasHoldCompleted = false // Сбрасываем при новом нажатии
+  
+  const tickRate = 30 
+  const step = 100 / (HOLD_DURATION / tickRate)
+
+  progressInterval = setInterval(() => {
+    if (progress.value < 100) {
+      progress.value += step
+    }
+  }, tickRate)
+
+  holdTimer = setTimeout(() => {
+    completeHold()
+  }, HOLD_DURATION)
+}
+
+const cancelHold = () => {
+  if (isReady.value) return
+
+  clearTimeout(holdTimer)
+  clearInterval(progressInterval)
+  progress.value = 0 
+}
+
+const handleMouseUp = () => {
+  if (isReady.value) return
+  cancelHold()
+}
+
+const completeHold = () => {
+  clearTimeout(holdTimer)
+  clearInterval(progressInterval)
+  
+  progress.value = 100
+  isReady.value = true 
+  wasHoldCompleted = true // Фиксируем готовность
+
+  // Отправляем true на бэкенд
+  sendReadyStateToServer(true)
+
+  // ФИКС БАГА СО СДВИГОМ КНОПКИ:
+  // Принудительно сбрасываем предохранитель через 500 миллисекунд.
+  // За это время палец точно будет отпущен. Если кнопка "уехала" и клик 
+  // не сработал — мы не застрянем в состоянии блокировки.
+  setTimeout(() => {
+    wasHoldCompleted = false
+  }, 500)
+}
+
+// Обработка клика (для отмены готовности)
+const handleClick = () => {
+  // БАГФИКС: Если кнопка только что перешла в "ready" через зажатие,
+  // этот клик — просто отпускание пальца человеком. Игнорируем его!
+  if (wasHoldCompleted) {
+    return
+  }
+
+  // Если игрок ОСОЗНАННО делает короткий клик по уже готовой кнопке — отменяем
+  if (isReady.value) {
+    isReady.value = false
+    progress.value = 0
+    
+    // Отправляем false на бэкенд
+    sendReadyStateToServer(false)
+  }
+}
+
+// Твоя оригинальная функция отправки, адаптированная под новые нужды
+const sendReadyStateToServer = (targetState) => {
+  if (!ws.value || ws.value.readyState !== WebSocket.OPEN) {
+    console.warn('WebSocket не підключено')
+    return
+  }
+
+  const message = {
+    type: 'toggle_ready',
+    payload: {
+      is_ready: targetState // Передаем актуальное состояние (true или false)
+    }
+  }
+
+  console.log('Sending ready toggle:', message)
+
+  try {
+    ws.value.send(JSON.stringify(message))
+    console.log('Ready state changed to:', targetState)
+  } catch (error) {
+    console.error('Помилка відправки статусу готовності:', error)
+  }
+}
 
 const notifications = ref([])
 let notifId = 0
@@ -705,29 +819,29 @@ const sendMessage = () => {
   }
 }
 
-const toggleReady = async () => {
-  if (!ws.value || ws.value.readyState !== WebSocket.OPEN) {
-    console.warn('WebSocket не підключено')
-    return
-  }
+// const toggleReady = async () => {
+//   if (!ws.value || ws.value.readyState !== WebSocket.OPEN) {
+//     console.warn('WebSocket не підключено')
+//     return
+//   }
   
-  const message = {
-    type: 'toggle_ready',
-    payload: {
-      is_ready: !isReady.value
-    }
-  }
+//   const message = {
+//     type: 'toggle_ready',
+//     payload: {
+//       is_ready: !isReady.value
+//     }
+//   }
   
-  console.log('Sending ready toggle:', message)
+//   console.log('Sending ready toggle:', message)
   
-  try {
-    ws.value.send(JSON.stringify(message))
-    isReady.value = !isReady.value
-    console.log('Ready state changed to:', isReady.value)
-  } catch (error) {
-    console.error('Помилка відправки статусу готовності:', error)
-  }
-}
+//   try {
+//     ws.value.send(JSON.stringify(message))
+//     isReady.value = !isReady.value
+//     console.log('Ready state changed to:', isReady.value)
+//   } catch (error) {
+//     console.error('Помилка відправки статусу готовності:', error)
+//   }
+// }
 
 const sendWebSocketMessage = async (message) => {
   if (!ws.value || ws.value.readyState !== WebSocket.OPEN) {
@@ -843,6 +957,45 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.hold-button {
+  position: relative;
+  overflow: hidden;    
+  user-select: none;   
+  -webkit-user-select: none;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.hold-button:active:not(.ready) {
+  transform: scale(0.97);
+}
+
+.hold-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background-color: rgba(46, 204, 113, 0.4); /* Полупрозрачный зеленый */
+  transition: width 0.03s linear;            
+  z-index: 1;
+}
+
+.button-text {
+  position: relative;
+  z-index: 2; 
+}
+
+/* Стили под твой класс .ready из старого кода */
+.hold-button.ready {
+  background-color: #2ec871 !important; 
+  color: white;
+}
+
+/* Меняем цвет на красный при наведении, только когда игрок готов (намек на отмену) */
+.hold-button.ready:hover {
+  background-color: #e74c3c !important; 
+}
+
 /* =========================================
    СИСТЕМА СПОВІЩЕНЬ (TOASTS)
    ========================================= */
