@@ -204,7 +204,25 @@ async def handle_chat(payload: dict, db: Session, player: Player ,room: GameRoom
         )
         db.add(new_message)
         db.commit()
+
+
+# Обробка чату мафії
+@register_handler("mafia_chat")
+async def mafia_chat(websocket: WebSocket, payload: dict, player: Player, room: GameRoom, **kwargs):
     
+    if player.role not in ["mafia", "mafia_don"]:
+        return
+    
+    message = payload.get("message", "")
+    if not message.strip():
+        return
+
+    # for player in room.players.values() if player.role in ["mafia", "mafia_don"]:
+    await room.broadcast({
+        "type": "mafia_chat",
+        "username": player.name,
+        "message": message
+    })
     
 # Обробка початку гри
 @register_handler("start_game")
@@ -298,7 +316,8 @@ async def resolve_night(room: GameRoom, db: Session ):
             room.kill_player(victim.id)
             await room.broadcast({
                 "type": "player_killed",
-                "message": f"{victim.name} був вбитий цієї ночі."
+                "message": f"{victim.name} був вбитий цієї ночі.",
+                "target_id": victim.id
             })
 
     # 3. Проверка комиссара/детектива
@@ -461,7 +480,8 @@ async def vote(websocket: WebSocket, payload: dict, db: Session, player: Player,
             room.kill_player(victim.id)
             await room.broadcast({
                 "type": "player_killed_vote",
-                "message": f"{victim.name} був повішений за результатами голосування."
+                "message": f"{victim.name} був повішений за результатами голосування.",
+                "target_id": victim.id
             })
         else:
             await room.broadcast({

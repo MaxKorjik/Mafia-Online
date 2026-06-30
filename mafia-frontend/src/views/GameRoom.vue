@@ -54,46 +54,98 @@
         </div>
       </div>
 
-      <div class="game-chat card">
-        <div class="chat-messages" ref="chatMessages">
-          <div v-for="message in messages" :key="message.id" class="message" :class="{
-            'isPersonal': message.type === 'personal',
-            'isSystem': message.type === 'system',
-            'isError': message.type === 'error'
-          }">
-            <template v-if="message.type === 'chat'">
-            <span class="message-sender">{{ message.username }}:</span>
-              <span class="message-text">{{ message.message }}</span>
-            </template>
-            <template v-else-if="message.type === 'system'">
-              <span class="message-text system-message">{{ message.message }}</span>
-            </template>
-            <template v-else-if="message.type === 'error'">
-              <span class="message-text error-message">{{ message.message }}</span>
-            </template>
-            <template v-else>
-              <span class="message-text">{{ message.message }}</span>
-            </template>
-          </div>
+      <div class="game-chat card" :class="{ 'mafia-mode': activeTab === 'mafia' }">
+        
+        <div class="chat-tabs">
+          <button 
+            class="tab-btn" 
+            :class="{ 'active': activeTab === 'general' }"
+            @click="setTab('general')"
+          >
+            Загальний
+          </button>
+          
+          <button 
+            v-if="isMafia" 
+            class="tab-btn mafia-tab" 
+            :class="{ 'active': activeTab === 'mafia', 'pulse-animation': gamePhase === 'night' }"
+            @click="setTab('mafia')"
+          >
+            🕵️‍♂️ Чат Мафії
+          </button>
         </div>
+
+        <div class="chat-messages" ref="chatMessages">
+          
+          <template v-if="activeTab === 'general'">
+            <div v-for="message in messages" :key="message.id" class="message" :class="{
+              'isPersonal': message.type === 'personal',
+              'isSystem': message.type === 'system',
+              'isError': message.type === 'error'
+              }">
+              <template v-if="message.type === 'chat'">
+                <span class="message-sender">{{ message.username }}:</span>
+                <span class="message-text">{{ message.message }}</span>
+              </template>
+              <template v-else-if="message.type === 'system'">
+                <span class="message-text system-message">{{ message.message }}</span>
+              </template>
+              <template v-else-if="message.type === 'error'">
+                <span class="message-text error-message">{{ message.message }}</span>
+              </template>
+              <template v-else>
+                <span class="message-text">{{ message.message }}</span>
+              </template>
+            </div>
+          </template>
+
+          <template v-else-if="activeTab === 'mafia'">
+            <div v-for="(message, index) in mafiaMessages" :key="'mafia-'+index" class="message mafia-msg">
+              <span class="message-sender mafia-sender">[Мафія] {{ message.username }}:</span>
+              <span class="message-text">{{ message.message }}</span>
+            </div>
+          </template>
+
+        </div>
+        
         <div class="chat-input">
           <input
+            v-if="activeTab === 'general' && gamePhase === 'night' && isGameStarted"
+            type="text"
+            placeholder="Місто заснуло... Писати заборонено."
+            disabled
+            class="input disabled-input"
+          />
+          <input
+            v-else
             type="text"
             v-model="newMessage"
             @keyup.enter="sendMessage"
-            placeholder="Введіть повідомлення..."
+            :placeholder="activeTab === 'mafia' ? 'Пишіть спільникам...' : 'Введіть повідомлення...'"
             class="input"
           />
-          <button @click="sendMessage" class="button">Надіслати</button>
+          <button 
+            @click="sendMessage" 
+            class="button"
+            :disabled="activeTab === 'general' && gamePhase === 'night' && isGameStarted"
+          >
+            Надіслати
+          </button>
         </div>
       </div>
-    </div>
+    </div> 
 
     <div class="game-controls">
       <button @click="leaveRoom" class="button danger-button">
         🚪 Вийти з кімнати
       </button>
-
+      <button
+        v-if="gamePhase === 'night' && canPerformNightAction && !hasCompletedNightAction && !showNightActionModal"
+        @click="showNightActionModal = true"
+        class="button night-action-button pulse-animation"
+      >
+        Відкрити нічні дії
+      </button>
       <button 
         v-if="!isGameStarted"
         @mousedown="startHold"
@@ -194,6 +246,11 @@
             <div class="action-option-name">{{ player.name }}</div>
           </div>
         </div>
+        <div style="margin-top: 20px; text-align: center;">
+          <button @click="showNightActionModal = false" class="button secondary">
+            Згорнути
+          </button>
+        </div>
       </div>
     </div>
     <div class="notifications-container">
@@ -241,6 +298,22 @@ const showRoleModal = ref(false)
 const showVoteModal = ref(false)
 const showNightActionModal = ref(false)
 const isLeaving = ref(false)
+const mafiaMessages = ref([]) // Масив для зберігання повідомлень мафії
+const activeTab = ref('general') // Поточна відкрита вкладка
+const isMafia = computed(() => ['mafia', 'mafia_don'].includes(myRole.value))
+const hasCompletedNightAction = ref(false)
+
+const setTab = (tab) => {
+  if (tab === 'mafia' && !isMafia.value) return // Захист: мирні не можуть відкрити
+  activeTab.value = tab
+  
+  // Прокручуємо чат вниз при зміні вкладки
+  nextTick(() => {
+    if (chatMessages.value) {
+      chatMessages.value.scrollTop = chatMessages.value.scrollHeight
+    }
+  })
+}
 
 const progress = ref(0)
 let holdTimer = null
@@ -653,6 +726,14 @@ const handleWebSocketMessage = (event) => {
       case 'player_killed':
       case 'player_killed_vote':
         showNotification(data.message, 'error')
+        const killedId = data.target_id || data.player_id; 
+        
+        if (killedId) {
+          const victim = players.value.find(p => p.id === killedId);
+          if (victim) {
+            victim.is_alive = false; // Vue миттєво перемалює картку
+          }
+        }
         break;
         
       case 'investigation_result':
@@ -737,7 +818,8 @@ const handleWebSocketMessage = (event) => {
         console.log('Phase change:', data);
         gamePhase.value = data.phase;
         currentRound.value = data.round;
-        
+        hasCompletedNightAction.value = false;
+
         if (data.phase === 'night') {
           if (['mafia','mafia_don', 'doctor', 'detective'].includes(myRole.value)) {
             showNightActionModal.value = true;
@@ -754,6 +836,15 @@ const handleWebSocketMessage = (event) => {
         console.log('Chat message:', data);
         messages.value.push({
           type: 'chat',
+          username: data.username,
+          message: data.message
+        });
+        break;
+
+      case 'mafia_chat':
+        console.log('Mafia chat message:', data);
+        mafiaMessages.value.push({
+          type: 'mafia_chat',
           username: data.username,
           message: data.message
         });
@@ -795,8 +886,12 @@ const sendMessage = () => {
   if (!newMessage.value.trim() || !ws.value) return
   
   if (ws.value.readyState === WebSocket.OPEN) {
+    
+    // Визначаємо тип події для бекенда залежно від обраної вкладки
+    const targetType = activeTab.value === 'mafia' ? 'mafia_chat' : 'chat'
+
     const message = {
-      type: 'chat',
+      type: targetType, 
       payload: {
         message: newMessage.value
       }
@@ -898,6 +993,7 @@ const performNightAction = async (targetId) => {
       await ws.value.send(JSON.stringify(message));
       showNightActionModal.value = false;
       // player.value.is_ready = True
+      hasCompletedNightAction.value = true;
       messages.value.push({
         type: 'system',
         message: `Ви виконали нічну дію як ${myRole.value}`
@@ -957,6 +1053,111 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.button.secondary {
+  background: var(--color-secondary);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  width: 100%;
+}
+
+.button.secondary:hover {
+  background: var(--color-border);
+}
+
+.night-action-button {
+  background: #2c3e50 !important; /* Темно-синий "ночной" цвет */
+  color: #fff !important;
+  box-shadow: 0 0 15px rgba(52, 73, 94, 0.6) !important;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); box-shadow: 0 0 10px rgba(52, 73, 94, 0.5); }
+  50% { transform: scale(1.05); box-shadow: 0 0 20px rgba(52, 73, 94, 0.8); }
+  100% { transform: scale(1); box-shadow: 0 0 10px rgba(52, 73, 94, 0.5); }
+}
+
+.pulse-animation {
+  animation: pulse 2s infinite;
+}
+/* =========================================
+   СТИЛІ ВЬКЛАДОК ЧАТУ
+   ========================================= */
+.chat-tabs {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 10px;
+  border-bottom: 2px solid var(--color-border);
+  padding-bottom: 5px;
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  padding: 8px 16px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 6px 6px 0 0;
+  opacity: 0.6;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tab-btn.active {
+  opacity: 1;
+  color: var(--color-accent);
+  background: var(--color-secondary);
+  border-bottom: 2px solid var(--color-accent);
+}
+
+.mafia-tab.active {
+  color: #ff4757;
+  border-bottom: 2px solid #ff4757;
+  background: rgba(255, 71, 87, 0.1);
+}
+
+/* Коли увімкнено режим мафії, трохи фарбуємо рамку всього чату */
+.game-chat.mafia-mode {
+  border: 1px solid rgba(255, 71, 87, 0.3);
+  box-shadow: 0 0 15px rgba(255, 71, 87, 0.1);
+}
+
+/* Стиль секретних повідомлень */
+.mafia-msg {
+  background: rgba(255, 71, 87, 0.1) !important;
+  border-left: 3px solid #ff4757;
+}
+
+.mafia-sender {
+  color: #ff4757 !important;
+  font-weight: bold;
+}
+
+/* Стиль заблокованого інпуту (ніч) */
+.disabled-input {
+  background: rgba(0, 0, 0, 0.2) !important;
+  border-color: #555 !important;
+  color: #888 !important;
+  cursor: not-allowed;
+  font-style: italic;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.7; }
+  50% { opacity: 1; text-shadow: 0 0 8px #ff4757; }
+  100% { opacity: 0.7; }
+}
+
+.pulse-animation {
+  animation: pulse 2s infinite;
+}
+
+
 .hold-button {
   position: relative;
   overflow: hidden;    
