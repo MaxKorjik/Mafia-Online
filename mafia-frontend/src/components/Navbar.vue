@@ -1,37 +1,45 @@
 <template>
-  <nav class="navbar" aria-label="Головна навігація">
-    <div class="navbar-container">
-      <router-link to="/" class="navbar-brand">
-        Mafia Online
+  <header class="newspaper-header">
+    <div class="logo-block">
+      <router-link to="/" class="logo-link">
+        <h1 class="logo-title">THE MAFIA NEWS</h1>
       </router-link>
+      <p class="logo-subtitle">Щоденна хроніка Чикаго — Випуск №1932</p>
+    </div>
+    
+    <nav class="main-nav">
+      <ul :class="{ 'open': menuOpen }">
+        <li><router-link to="/" @click="closeMenu">Головна</router-link></li>
+        <li><router-link to="/rooms" @click="closeMenu">Кімнати</router-link></li>
+        <li><router-link to="/leaderboard" @click="closeMenu">Рейтинг</router-link></li>
+      </ul>
+    </nav>
 
-      <button class="burger" @click="toggleMenu" :aria-expanded="menuOpen.toString()" aria-label="Відкрити меню">
-        <span :class="{ 'open': menuOpen }"></span>
-        <span :class="{ 'open': menuOpen }"></span>
-        <span :class="{ 'open': menuOpen }"></span>
-      </button>
-
-      <div class="navbar-menu" :class="{ open: menuOpen }">
-        <router-link to="/" class="navbar-link" @click="closeMenu">Головна</router-link>
-        <router-link to="/rooms" class="navbar-link" @click="closeMenu">Кімнати</router-link>
-        <router-link to="/leaderboard" class="navbar-link" @click="closeMenu">Таблиця лідерів</router-link>
-      </div>
-
-      <div class="navbar-actions">
-        <ThemeToggle />
-        <template v-if="isLoggedIn">
-          <router-link to="/profile" class="navbar-link" @click="closeMenu">
+    <div class="header-right">
+      <ThemeToggle />
+      
+      <template v-if="isLoggedIn">
+        <div class="user-profile">
+          <div class="avatar">
+            <span v-if="username">{{ username[0].toUpperCase() }}</span>
+          </div>
+          <router-link to="/profile" class="user-name" @click="closeMenu">
             {{ username }}
           </router-link>
-          <button @click="logout" class="btn btn-danger">Вийти</button>
-        </template>
-        <template v-else>
-          <router-link to="/login" class="btn" @click="closeMenu">Увійти</router-link>
-          <router-link to="/register" class="btn btn-secondary" @click="closeMenu">Реєстрація</router-link>
-        </template>
-      </div>
+          <button @click="logout" class="btn-logout" title="Вийти">✖</button>
+        </div>
+      </template>
+      <template v-else>
+        <div class="auth-links">
+          <!-- Добавлен @click="closeMenu" для закрытия шторки на мобилках -->
+          <router-link to="/login" class="btn-enter" @click="closeMenu">Увійти</router-link>
+          <router-link to="/register" class="btn-enter" @click="closeMenu">Реєстрація</router-link>
+        </div>
+      </template>
+
+      <button class="burger" @click="toggleMenu">☰</button>
     </div>
-  </nav>
+  </header>
 </template>
 
 <script setup>
@@ -64,92 +72,108 @@ const logout = async () => {
 </script>
 
 <style scoped>
-.navbar {
-  background-color: var(--bg-secondary);
-  box-shadow: var(--shadow-sm);
-  padding: var(--spacing-md) var(--spacing-lg);
-  width: 100%;
-  position: relative;
-  z-index: 10;
-  box-sizing: border-box;
-}
-
-.navbar-container {
+.newspaper-header {
+  position: relative; /* Добавлено для корректного абсолютного позиционирования меню */
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  justify-content: space-between; /* Лого зліва, Кнопки справа */
-  width: 100%;
-  max-width: 1200px; /* Обмежуємо ширину шапки разом із сайтом */
-  margin: 0 auto;
-  box-sizing: border-box;
+  border-top: 5px double var(--ink-color);
+  border-bottom: 2px solid var(--ink-color);
+  padding: 20px 0;
+  margin-bottom: 35px;
+  flex-wrap: wrap;
+  gap: 20px;
 }
 
-.navbar-brand {
-  font-size: var(--font-size-xl);
-  font-weight: bold;
-  color: var(--primary-color);
+.logo-block { text-align: left; }
+.logo-link { text-decoration: none; color: inherit; }
+.logo-title {
+  font-family: var(--font-heading);
+  font-size: 3.2rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  line-height: 0.95;
+}
+.logo-subtitle {
+  font-family: var(--font-text);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 8px;
+  opacity: 0.8;
+}
+
+.main-nav ul {
+  display: flex;
+  list-style: none;
+  gap: 25px;
+}
+.main-nav a {
+  color: var(--ink-color);
   text-decoration: none;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 1.1rem;
+  text-transform: uppercase;
   transition: color 0.2s;
 }
+.main-nav a:hover, .main-nav a.router-link-active { color: var(--accent-color); }
 
-.navbar-brand:hover {
-  color: var(--accent-color);
-}
-
-.navbar-menu {
-  display: flex;
-  gap: var(--spacing-lg);
-}
-
-.navbar-link {
-  color: var(--text-primary);
-  text-decoration: none;
-  transition: all 0.2s;
-  border-radius: 6px;
-  padding: 0.4rem 1rem;
-  font-weight: 500;
-}
-
-.navbar-link:hover, .navbar-link:focus {
-  color: var(--primary-color);
-  background: var(--bg-tertiary);
-}
-
-.navbar-actions {
+.header-right {
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
+  gap: 20px;
 }
 
-.burger {
-  display: none; /* Заховано на ПК */
-  flex-direction: column;
-  gap: 4px;
-  background: none;
-  border: none;
-  cursor: pointer;
+.auth-links { display: flex; gap: 10px; }
+.btn-enter {
+  padding: 6px 12px; background: transparent; border: 1px solid var(--ink-color);
+  color: var(--ink-color); font-family: var(--font-text); font-weight: bold;
+  text-transform: uppercase; font-size: 0.85rem; cursor: pointer; text-decoration: none;
+}
+.btn-enter:hover { background: var(--ink-color); color: var(--paper-color); }
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-left: 1px solid var(--stamp-border);
+  padding-left: 20px;
+}
+.avatar {
+  width: 42px; height: 42px; border-radius: 50%; border: 2px solid var(--ink-color);
+  background-color: var(--paper-shadow);
+  display: flex; justify-content: center; align-items: center;
+  font-family: var(--font-heading); font-weight: bold; font-size: 1.2rem;
+}
+.user-name { font-family: var(--font-text); font-weight: 700; font-size: 0.9rem; text-decoration: none; color: var(--ink-color); }
+.btn-logout {
+  background: none; border: none; color: var(--accent-color); font-weight: bold; cursor: pointer; font-size: 1rem;
 }
 
-/* 📱 МОБІЛЬНА ВЕРСІЯ НАВІГАЦІЇ (для телефонів) */
-@media (max-width: 768px) {
-  .burger {
-    display: flex;
-  }
+.burger { display: none; background: none; border: none; font-size: 1.5rem; color: var(--ink-color); cursor: pointer; }
 
-  .navbar-menu {
-    display: none; /* Перетворюємо на випадайку, якщо потрібно */
-    flex-direction: column;
-    position: absolute;
-    top: 100%;
-    left: 0;
-    width: 100%;
-    background: var(--bg-secondary);
-    padding: var(--spacing-md);
-    box-shadow: var(--shadow-md);
+@media (max-width: 950px) {
+  .burger { display: block; }
+  .main-nav ul { 
+    display: none; 
+    flex-direction: column; 
+    width: 100%; 
+    position: absolute; 
+    background: var(--paper-color); 
+    padding: 20px; 
+    z-index: 10; 
+    border: 2px solid var(--ink-color); 
+    left: 0; 
+    top: 100%; /* Гарантирует, что меню откроется ровно под хедером */
   }
-
-  .navbar-menu.open {
-    display: flex;
-  }
+  .main-nav ul.open { display: flex; }
+}
+@media (max-width: 680px) {
+  .newspaper-header { flex-direction: column; text-align: center; }
+  .header-right { flex-direction: column; width: 100%; gap: 15px; }
+  .user-profile { border-left: none; border-top: 1px solid var(--stamp-border); padding-left: 0; padding-top: 15px; width: 100%; justify-content: center; }
+  .logo-title { font-size: 2.3rem; }
 }
 </style>

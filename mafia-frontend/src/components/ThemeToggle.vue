@@ -1,37 +1,56 @@
 <template>
-  <button class="theme-toggle" @click="toggleTheme" :title="theme === 'dark' ? 'Світла тема' : 'Темна тема'">
-    <svg v-if="theme === 'dark'" width="24" height="24" fill="none"><circle cx="12" cy="12" r="10" fill="#fff"/><path d="M12 2a10 10 0 0 0 0 20c5.523 0 10-4.477 10-10S17.523 2 12 2Z" fill="#d32f2f"/></svg>
-    <svg v-else width="24" height="24" fill="none"><circle cx="12" cy="12" r="10" fill="#1976d2"/><path d="M12 2a10 10 0 0 0 0 20c5.523 0 10-4.477 10-10S17.523 2 12 2Z" fill="#fff"/></svg>
+  <button class="theme-toggle-btn" @click="toggleTheme">
+    {{ isDark ? '☀️ Денний випуск' : '🌙 Нічний випуск' }}
   </button>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
 
-const theme = ref(localStorage.getItem('theme') || 'dark')
+// Инициализируем значение сразу на основе localStorage, чтобы избежать рассинхрона шаблона
+const getSavedTheme = () => {
+  return localStorage.getItem('theme') === 'dark'
+}
+
+const isDark = ref(getSavedTheme())
 
 const toggleTheme = () => {
-  theme.value = theme.value === 'dark' ? 'light' : 'dark'
-  document.documentElement.setAttribute('data-theme', theme.value)
-  localStorage.setItem('theme', theme.value)
+  isDark.value = !isDark.value
+  if (isDark.value) {
+    document.body.classList.add('dark-theme')
+    localStorage.setItem('theme', 'dark')
+  } else {
+    document.body.classList.remove('dark-theme')
+    localStorage.setItem('theme', 'light')
+  }
 }
 
 onMounted(() => {
-  document.documentElement.setAttribute('data-theme', theme.value)
+  // На всякий случай дублируем класс на body при монтировании, если тема темная
+  if (isDark.value) {
+    document.body.classList.add('dark-theme')
+  } else {
+    document.body.classList.remove('dark-theme')
+  }
 })
 </script>
 
 <style scoped>
-.theme-toggle {
-  background: none;
-  border: none;
+.theme-toggle-btn {
+  background: transparent;
+  border: 1px dashed var(--ink-color);
+  color: var(--ink-color);
+  padding: 6px 12px;
+  font-family: var(--font-text);
+  font-size: 0.85rem;
   cursor: pointer;
-  margin-left: 1rem;
-  transition: filter .2s;
-  filter: drop-shadow(0 0 4px var(--color-accent-glow));
+  text-transform: uppercase;
+  font-weight: bold;
+  transition: all 0.3s ease;
 }
-.theme-toggle svg {
-  width: 2rem;
-  height: 2rem;
+
+.theme-toggle-btn:hover {
+  background-color: var(--ink-color);
+  color: var(--paper-color);
 }
-</style> 
+</style>

@@ -1,0 +1,54 @@
+/* Подключаем палитру и базу */
+@import './theme.css';
+@import './base.css';
+
+/* =========================================
+   ГЛОБАЛЬНЫЙ КАРКАС ГАЗЕТЫ
+   ========================================= */
+.newspaper-wrapper {
+  position: relative;
+  max-width: 1200px;
+  width: 100%;
+  z-index: 1;
+  filter: drop-shadow(0 25px 35px rgba(0, 0, 0, 0.8));
+}
+
+/* Тени и нижние листы бумаги */
+.newspaper-wrapper::before,
+.newspaper-wrapper::after {
+  content: '';
+  position: absolute;
+  background-color: var(--paper-shadow);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  transition: background-color 0.4s ease;
+}
+
+.newspaper-wrapper::before {
+  top: 5px; left: -8px; right: 6px; bottom: -5px;
+  transform: rotate(-0.7deg);
+  z-index: -1;
+}
+
+.newspaper-wrapper::after {
+  top: 10px; left: 5px; right: -10px; bottom: -3px;
+  transform: rotate(1.1deg);
+  z-index: -2;
+}
+
+/* Главный лист бумаги */
+.newspaper-main {
+  background-color: var(--paper-color);
+  padding: 35px 45px;
+  position: relative;
+  z-index: 2;
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.2);
+  background-image: linear-gradient(rgba(0, 0, 0, 0.015) 1px, transparent 1px);
+  background-size: 100% 4px;
+  transition: background-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+@media (max-width: 680px) {
+  .newspaper-main {
+    padding: 20px 15px;
+  }
+}

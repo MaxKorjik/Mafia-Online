@@ -1,270 +1,370 @@
 <template>
-  <div class="game-room">
-    <div class="game-header">
-      <h1>
-        {{ room.name }}
-      </h1>
-      <ThemeToggle />
-      <div class="room-status">
-        <span>Гравців: {{ room.players_number }}/{{ room.max_players_number }}</span>
-        <span v-if="isOwner" class="owner-badge">Ви власник</span>
-      </div>
-      <div class="game-phase">
-        <span>Фаза: {{ gamePhase === 'day' ? 'День' : gamePhase === 'night' ? 'Ніч' : 'Очікування' }}</span>
-        <span v-if="currentRound > 0">Раунд: {{ currentRound }}</span>
-      </div>
-    </div>
+  <div class="newspaper-wrapper">
+    <div class="newspaper-main">
+      
+      <!-- ІНФОРМАЦІЙНА ПАНЕЛЬ КІМНАТИ (БЕЗ ДУБЛЮВАННЯ NAVBAR) -->
+      <header class="newspaper-header room-info-header">
+        <div class="logo-block">
+          <h2 class="room-title">Кімната: {{ room.name }}</h2>
+        </div>
+        <div class="header-right">
+          <div class="room-status-badge">
+            Гравців: {{ players.length }}/{{ room.max_players_number }}
+          </div>
+          <div class="phase-badge" :class="{ 'night-phase-pulse': gamePhase === 'night' }">
+            Фаза: {{ gamePhase === 'day' ? 'День ☀️' : gamePhase === 'night' ? 'Ніч 🌙' : 'Очікування ⏳' }}
+            <span v-if="currentRound > 0" class="round-num"> | Раунд {{ currentRound }}</span>
+          </div>
+        </div>
+      </header>
 
-    <div class="game-content">
-      <div class="players-list card">
-        <h2>Гравці</h2>
-        <div class="players-grid">
-          <div v-for="player in players" :key="player.id || player.username" class="player-card" :class="{ 'dead': !player.is_alive }">
-            <div class="player-avatar">
-              {{ player.id }}
+      <!-- СЕТКА КОНТЕНТА -->
+      <main class="content-grid">
+        
+        <!-- ЛЕВАЯ КОЛОНКА (Материалы дела / Игроки) -->
+        <section class="left-column">
+          <h2 class="section-title">Матеріали справи (Гравці)</h2>
+          
+          <!-- Досье текущего игрока (Вы) -->
+          <div class="hero-dossier" v-if="myPlayerObject">
+            <div class="dossier-photo-container">
+              <div class="dossier-photo">{{ currentUserId }}</div>
             </div>
-            <div class="player-info">
-              <span class="player-name">{{ player.name || player.username || 'Unknown' }}</span>
-              
-              <div class="player-status">
-                <span v-if="player.id == room.owner || player.is_owner" class="owner-badge" title="Власник" style="display: inline-flex; align-items: center; gap: 4px;">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M2 19h20M4 19l2-8h12l2 8M7 11V7a5 5 0 0 1 10 0v4" stroke="#ff1744" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><ellipse cx="12" cy="7" rx="3" ry="2" fill="#ffd600"/></svg>
-                  Власник
-                </span>
-                
-                <span v-if="player.is_ready && !isGameStarted" class="ready-badge" title="Готовий" style="display: inline-flex; align-items: center; gap: 4px;">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#43a047"/><path d="M8 12l2 2l4-4" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  Готовий
-                </span>
+            <div class="dossier-info">
+              <h3>{{ myPlayerObject.name || myPlayerObject.username || 'Ви' }} (Ви)</h3>
+              <p><strong>Статус:</strong> {{ myPlayerObject.is_alive ? 'Живий та дає свідчення.' : 'Ліквідований.' }}</p>
+              <ul>
+                <li v-if="isOwner">Ви є творцем та власником цієї кімнати.</li>
+                <li v-if="myPlayerObject.is_ready && !isGameStarted">Ви підтвердили готовність до початку sprawy.</li>
+                <li v-else-if="!isGameStarted">Очікування підтвердження вашої готовності.</li>
+                <li v-if="isGameStarted && myRole">Ваша роль у цій грі задокументована.</li>
+              </ul>
+            </div>
+            <!-- Печать роли, если игра началась -->
+            <div v-if="isGameStarted && myRole" class="stamp-role" :class="myRole">
+              {{ 
+                myRole === 'mafia' ? 'Мафія' : 
+                myRole === 'mafia_don' ? 'Дон' : 
+                myRole === 'doctor' ? 'Лікар' : 
+                myRole === 'detective' ? 'Шериф' : 
+                'Мирний' 
+              }}
+            </div>
+          </div>
 
-                <span v-if="!player.is_alive" class="dead-badge" title="Мертвий" style="display: inline-flex; align-items: center; gap: 4px;">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#e53935"/><path d="M9 9l6 6M15 9l-6 6" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
-                  Мертвий
-                </span>
+          <!-- Разбросанные полароиды игроков -->
+          <div class="suspects-area">
+            <div 
+              v-for="player in otherPlayers" 
+              :key="player.id || player.username" 
+              class="suspect-polaroid" 
+              :class="{ 'dead': !player.is_alive }"
+              @click="handlePlayerClick(player)"
+            >
+              <div class="polaroid-img">
+                <span class="polaroid-id-badge">#{{ player.id }}</span>
+                <div class="polaroid-overlay">
+                  {{ isGameStarted ? 'Взаємодія' : 'Інформація' }}
+                </div>
+              </div>
+              <div class="polaroid-name">
+                {{ player.name || player.username || 'Unknown' }}
+              </div>
+              
+              <!-- Кнопки управления и статусы поверх полароида -->
+              <div class="polaroid-badges">
+                <span v-if="player.id == room.owner || player.is_owner" class="badge-owner-icon" title="Власник">👑</span>
+                <span v-if="player.is_ready && !isGameStarted" class="badge-ready-icon" title="Готовий">✔️</span>
+              </div>
+
+              <button 
+                v-if="isOwner && player.id !== currentUserId && !isGameStarted" 
+                @click.stop="kickPlayer(player.id)" 
+                class="kick-button-polaroid" 
+                title="Вигнати гравця"
+              >
+                ❌
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ПРАВАЯ КОЛОНКА (Пишущая машинка / Чат) -->
+        <aside class="right-column">
+          <div class="typewriter-chat" :class="{ 'mafia-mode': activeTab === 'mafia' }">
+            <div class="chat-tabs">
+              <div 
+                class="chat-tab" 
+                :class="{ 'active': activeTab === 'general' }"
+                @click="setTab('general')"
+              >
+                Зал суду
+              </div>
+              <div 
+                v-if="isMafia"
+                class="chat-tab mafia-tab" 
+                :class="{ 'active': activeTab === 'mafia', 'pulse-animation': gamePhase === 'night' }"
+                @click="setTab('mafia')"
+              >
+                Шифровка 🕵️‍♂️
               </div>
             </div>
-            <button 
-              v-if="isOwner && player.id !== currentUserId && !isGameStarted" 
-              @click="kickPlayer(player.id)" 
-              class="kick-button" 
-              title="Вигнати гравця">
-              ❌
-            </button>
-          </div>
-        </div>
-      </div>
+            
+            <div class="chat-messages" ref="chatMessages">
+              <!-- Общий чат -->
+              <template v-if="activeTab === 'general'">
+                <div v-for="message in messages" :key="message.id" class="msg" :class="{
+                  'isPersonal': message.type === 'personal',
+                  'isSystem': message.type === 'system',
+                  'isError': message.type === 'error'
+                }">
+                  <template v-if="message.type === 'chat'">
+                    <strong>{{ message.username }}:</strong> {{ message.message }}
+                  </template>
+                  <template v-else-if="message.type === 'system'">
+                    <span class="system-message-text">{{ message.message }}</span>
+                  </template>
+                  <template v-else-if="message.type === 'error'">
+                    <span class="error-message-text">{{ message.message }}</span>
+                  </template>
+                  <template v-else>
+                    {{ message.message }}
+                  </template>
+                </div>
+              </template>
 
-      <div class="game-chat card" :class="{ 'mafia-mode': activeTab === 'mafia' }">
-        
-        <div class="chat-tabs">
-          <button 
-            class="tab-btn" 
-            :class="{ 'active': activeTab === 'general' }"
-            @click="setTab('general')"
-          >
-            Загальний
-          </button>
-          
-          <button 
-            v-if="isMafia" 
-            class="tab-btn mafia-tab" 
-            :class="{ 'active': activeTab === 'mafia', 'pulse-animation': gamePhase === 'night' }"
-            @click="setTab('mafia')"
-          >
-            🕵️‍♂️ Чат Мафії
-          </button>
-        </div>
-
-        <div class="chat-messages" ref="chatMessages">
-          
-          <template v-if="activeTab === 'general'">
-            <div v-for="message in messages" :key="message.id" class="message" :class="{
-              'isPersonal': message.type === 'personal',
-              'isSystem': message.type === 'system',
-              'isError': message.type === 'error'
-              }">
-              <template v-if="message.type === 'chat'">
-                <span class="message-sender">{{ message.username }}:</span>
-                <span class="message-text">{{ message.message }}</span>
-              </template>
-              <template v-else-if="message.type === 'system'">
-                <span class="message-text system-message">{{ message.message }}</span>
-              </template>
-              <template v-else-if="message.type === 'error'">
-                <span class="message-text error-message">{{ message.message }}</span>
-              </template>
-              <template v-else>
-                <span class="message-text">{{ message.message }}</span>
+              <!-- Чат мафии -->
+              <template v-else-if="activeTab === 'mafia'">
+                <div v-for="(message, index) in mafiaMessages" :key="'mafia-'+index" class="msg mafia-msg">
+                  <strong>[Мафія] {{ message.username }}:</strong> {{ message.message }}
+                </div>
               </template>
             </div>
-          </template>
 
-          <template v-else-if="activeTab === 'mafia'">
-            <div v-for="(message, index) in mafiaMessages" :key="'mafia-'+index" class="message mafia-msg">
-              <span class="message-sender mafia-sender">[Мафія] {{ message.username }}:</span>
-              <span class="message-text">{{ message.message }}</span>
+            <div class="chat-input">
+              <input
+                v-if="activeTab === 'general' && gamePhase === 'night' && isGameStarted"
+                type="text"
+                placeholder="Місто заснуло... Наказувати заборонено."
+                disabled
+                class="input disabled-input"
+              />
+              <input
+                v-else
+                type="text"
+                v-model="newMessage"
+                @keyup.enter="sendMessage"
+                :placeholder="activeTab === 'mafia' ? 'Пишіть спільникам...' : 'Введіть показання...'"
+              />
+              <button 
+                @click="sendMessage"
+                :disabled="activeTab === 'general' && gamePhase === 'night' && isGameStarted"
+              >
+                Ввід
+              </button>
             </div>
-          </template>
-
-        </div>
-        
-        <div class="chat-input">
-          <input
-            v-if="activeTab === 'general' && gamePhase === 'night' && isGameStarted"
-            type="text"
-            placeholder="Місто заснуло... Писати заборонено."
-            disabled
-            class="input disabled-input"
-          />
-          <input
-            v-else
-            type="text"
-            v-model="newMessage"
-            @keyup.enter="sendMessage"
-            :placeholder="activeTab === 'mafia' ? 'Пишіть спільникам...' : 'Введіть повідомлення...'"
-            class="input"
-          />
-          <button 
-            @click="sendMessage" 
-            class="button"
-            :disabled="activeTab === 'general' && gamePhase === 'night' && isGameStarted"
-          >
-            Надіслати
-          </button>
-        </div>
-      </div>
-    </div> 
-
-    <div class="game-controls">
-      <button @click="leaveRoom" class="button danger-button">
-        🚪 Вийти з кімнати
-      </button>
-      <button
-        v-if="gamePhase === 'night' && canPerformNightAction && !hasCompletedNightAction && !showNightActionModal"
-        @click="showNightActionModal = true"
-        class="button night-action-button pulse-animation"
-      >
-        Відкрити нічні дії
-      </button>
-      <button 
-        v-if="!isGameStarted"
-        @mousedown="startHold"
-        @mouseup="handleMouseUp"
-        @mouseleave="cancelHold"
-        @touchstart="startHold"
-        @touchend="handleMouseUp"
-        @click="handleClick"
-        class="button hold-button"
-        :class="{ 'ready': isReady }"
-      >
-        <div v-if="!isReady" class="hold-progress" :style="{ width: progress + '%' }"></div>
-        
-        <span class="button-text">
-          {{ isReady ? 'Готовий (Натисніть, щоб скасувати)' : 'Затисніть для готовності' }}
-        </span>
-      </button>
-
-      <button 
-        v-if="isOwner && canStartGame" 
-        @click="startGame" 
-        class="start-game-button"
-      >
-        Почати гру
-      </button>
-      <div v-else-if="isOwner" class="start-game-info">
-        <template v-if="players.length < room.min_players_number">
-          Очікування гравців ({{ players.length }}/{{ room.min_players_number }})
-        </template>
-        <template v-else-if="!players.every(p => p.is_ready)">
-          Очікування готовності гравців
-        </template>
-      </div>
-
-      <button
-        v-if="canVote && gamePhase === 'day'"
-        @click="showVoteModal = true"
-        class="button vote-button"
-      >
-        Голосувати
-      </button>
-    </div>
-
-    <!-- Модальне вікно ролі -->
-    <div v-if="showRoleModal" class="modal" style="z-index: 9999;">
-      <div class="modal-content">
-        <h3>Ваша роль</h3>
-        <p class="role-name">{{ 
-          myRole === 'mafia' ? 'Мафія' : 
-          myRole === 'mafia_don' ? 'Мафія Дон' : 
-          myRole === 'doctor' ? 'Лікар' : 
-          myRole === 'detective' ? 'Детектив' : 
-          'Мирний житель' 
-        }}</p>
-        
-        <div v-if="['mafia', 'mafia_don'].includes(myRole) && otherMafia.length > 0" class="other-mafia">
-          <h4>Інші мафійники:</h4>
-          <ul>
-            <li v-for="mafia in otherMafia" :key="mafia.id">
-              {{ mafia.name || mafia.username }}
-            </li>
-          </ul>
-        </div>
-        
-        <button @click="showRoleModal = false" class="button">Зрозуміло</button>
-      </div>
-    </div>
-
-    <div v-if="showVoteModal && !showRoleModal" class="modal">
-      <div class="modal-content">
-        <h3>Голосування</h3>
-        <p class="vote-description">Оберіть гравця, якого хочете вигнати:</p>
-        <div class="vote-options">
-          <div v-for="player in alivePlayers" :key="player.id" 
-            class="vote-option" 
-            @click="vote(player.id)">
-            <div class="vote-option-avatar">{{ player.id }}</div>
-            <div class="vote-option-name">{{ player.name || player.username }}</div>
           </div>
-        </div>
-        <button @click="showVoteModal = false" class="button secondary">Скасувати</button>
-      </div>
-    </div>
+        </aside>
 
-    <div v-if="showNightActionModal && amIAlive && !showRoleModal" class="modal">
-      <div class="modal-content">
-        <h3>{{ 
-          myRole === 'mafia'  ? 'Виберіть жертву' : 
-          myRole === 'mafia_don'  ? 'Виберіть жертву' : 
-          myRole === 'doctor' ? 'Виберіть кого лікувати' : 
-          'Виберіть кого перевірити' 
-        }}</h3>
-        <div class="night-actions">
-          <div v-for="player in alivePlayers" :key="player.id" 
-            class="action-option" 
-            @click="performNightAction(player.id)">
-            <div class="action-option-avatar">{{ player.id }}</div>
-            <div class="action-option-name">{{ player.name }}</div>
-          </div>
-        </div>
-        <div style="margin-top: 20px; text-align: center;">
-          <button @click="showNightActionModal = false" class="button secondary">
-            Згорнути
-          </button>
-        </div>
-      </div>
-    </div>
-    <div class="notifications-container">
-      <transition-group name="toast">
-        <div 
-          v-for="notif in notifications" 
-          :key="notif.id" 
-          class="toast" 
-          :class="notif.type"
+      </main>
+
+      <!-- ПАНЕЛЬ УПРАВЛЕНИЯ -->
+      <footer class="game-controls-panel">
+        <button @click="leaveRoom" class="btn-newspaper-control danger">
+          🚪 Вийти з кімнати
+        </button>
+
+        <!-- Кнопка ночного действия -->
+        <button
+          v-if="gamePhase === 'night' && canPerformNightAction && !hasCompletedNightAction && !showNightActionModal"
+          @click="showNightActionModal = true"
+          class="btn-newspaper-control night-action"
         >
-          {{ notif.message }}
+          🌃 Відкрити нічні дії
+        </button>
+
+        <!-- Кнопка голосования (днем) -->
+        <button
+          v-if="canVote && gamePhase === 'day'"
+          @click="showVoteModal = true"
+          class="btn-newspaper-control vote-action"
+        >
+          ⚖️ Голосувати
+        </button>
+
+        <!-- Кнопка готовности с механикой удержания -->
+        <button 
+          v-if="!isGameStarted"
+          @mousedown="startHold"
+          @mouseup="handleMouseUp"
+          @mouseleave="cancelHold"
+          @touchstart="startHold"
+          @touchend="handleMouseUp"
+          @click="handleClick"
+          class="btn-newspaper-control hold-ready"
+          :class="{ 'ready': isReady }"
+        >
+          <div v-if="!isReady" class="hold-progress" :style="{ width: progress + '%' }"></div>
+          <span class="button-text">
+            {{ isReady ? '✔️ Готовий (Натисніть для скасування)' : '⏳ Затисніть для готовності' }}
+          </span>
+        </button>
+
+        <!-- Кнопка старта игры владельца -->
+        <button 
+          v-if="isOwner && canStartGame" 
+          @click="startGame" 
+          class="btn-newspaper-control start-game"
+        >
+          🏁 Почати гру
+        </button>
+        <div v-else-if="isOwner && !isGameStarted" class="start-game-waiting">
+          <template v-if="players.length < room.min_players_number">
+            Очікування гравців ({{ players.length }}/{{ room.min_players_number }})
+          </template>
+          <template v-else-if="!players.every(p => p.is_ready)">
+            Очікування готовності гравців
+          </template>
         </div>
-      </transition-group>
+      </footer>
+
     </div>
+  </div>
+
+  <!-- УНИВЕРСАЛЬНОЕ МОДАЛЬНОЕ ОКНО (ОВЕРЛЕЙ) -->
+  <div class="wow-modal-overlay" :class="{ 'active': isAnyModalOpen }" id="main-modal-overlay">
+    
+    <!-- МОДАЛКА: ВАША РОЛЬ (ОБЪЯВЛЕНИЕ В НАЧАЛЕ ИГРЫ) -->
+    <div v-if="showRoleModal" class="suspect-file-modal" style="display: block;">
+      <div class="file-header">ОТРИМАНО СЕКРЕТНЕ ЗАВДАННЯ</div>
+      <div class="file-content">
+        <div class="file-photo-placeholder role-photo"></div>
+        <div class="file-details">
+          <h4>Ваша роль: <span class="role-highlight">{{ 
+            myRole === 'mafia' ? 'Мафія 🔫' : 
+            myRole === 'mafia_don' ? 'Дон Мафії 🕶️' : 
+            myRole === 'doctor' ? 'Лікар 🩺' : 
+            myRole === 'detective' ? 'Комісар 🔎' : 
+            'Мирний житель 👨‍🌾' 
+          }}</span></h4>
+          <p>Дотримуйтесь таємниці слідства. Не розголошуйте свої документи стороннім особам.</p>
+          
+          <div v-if="['mafia', 'mafia_don'].includes(myRole) && otherMafia.length > 0" class="other-mafia-box">
+            <h5>Ваші спільники:</h5>
+            <ul>
+              <li v-for="mafia in otherMafia" :key="mafia.id">
+                🕵️‍♂️ {{ mafia.name || mafia.username }} (ID: {{ mafia.id }})
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="file-actions">
+        <button class="btn-vote" @click="showRoleModal = false">Прийняти до відома</button>
+      </div>
+    </div>
+
+    <!-- МОДАЛКА: КАРТОЧКА ПОДОЗРЕВАЕМОГО ДЛЯ ВЗАИМОДЕЙСТВИЯ -->
+    <div v-if="selectedPlayerForModal" class="suspect-file-modal" style="display: block;">
+      <button class="btn-close-file" @click="closePlayerModal">✖</button>
+      <div class="file-header">ОСОБОВА СПРАВА №{{ selectedPlayerForModal.id }}</div>
+      
+      <div class="file-content">
+        <div class="file-photo-placeholder">
+          <span class="placeholder-id">#{{ selectedPlayerForModal.id }}</span>
+        </div>
+        <div class="file-details">
+          <h4>{{ selectedPlayerForModal.name || selectedPlayerForModal.username }}</h4>
+          <p><strong>Статус:</strong> {{ selectedPlayerForModal.is_alive ? 'Живий подозрюваний' : 'Ліквідований' }}</p>
+          <p><strong>Алібі:</strong> {{ selectedPlayerForModal.is_alive ? 'Перевіряється у залі суду.' : 'Алібі більше не потрібне.' }}</p>
+        </div>
+      </div>
+
+      <div class="file-actions">
+        <!-- Кнопка голосования (днем) -->
+        <button 
+          v-if="canVote && gamePhase === 'day' && selectedPlayerForModal.is_alive" 
+          class="btn-vote" 
+          @click="vote(selectedPlayerForModal.id); closePlayerModal();"
+        >
+          Звинуватити (День)
+        </button>
+        <!-- Кнопка ночного действия -->
+        <button 
+          v-if="gamePhase === 'night' && canPerformNightAction && !hasCompletedNightAction && selectedPlayerForModal.is_alive" 
+          class="btn-night-action" 
+          @click="performNightAction(selectedPlayerForModal.id); closePlayerModal();"
+        >
+          Обрати ціллю (Ніч)
+        </button>
+      </div>
+    </div>
+
+    <!-- МОДАЛКА: ГОЛОСОВАНИЕ (ОБЩИЙ СПИСОК) -->
+    <div v-if="showVoteModal && !showRoleModal" class="suspect-file-modal" style="display: block;">
+      <button class="btn-close-file" @click="showVoteModal = false">✖</button>
+      <div class="file-header">ДЕННЕ СУДОВЕ ГОЛОСУВАННЯ</div>
+      <p class="vote-description">Оберіть справу підсудного для винесення вироку:</p>
+      
+      <div class="modal-players-list">
+        <div 
+          v-for="player in alivePlayers" 
+          :key="player.id" 
+          class="modal-player-row" 
+          @click="vote(player.id); showVoteModal = false;"
+        >
+          <div class="row-avatar">#{{ player.id }}</div>
+          <div class="row-name">{{ player.name || player.username }}</div>
+          <div class="row-action-indicator">⚖️ Проголосувати</div>
+        </div>
+      </div>
+      <div class="file-actions">
+        <button class="btn-vote" @click="showVoteModal = false">Скасувати</button>
+      </div>
+    </div>
+
+    <!-- МОДАЛКА: НОЧНЫЕ ДЕЙСТВИЯ (ОБЩИЙ СПИСОК) -->
+    <div v-if="showNightActionModal && amIAlive && !showRoleModal" class="suspect-file-modal" style="display: block;">
+      <button class="btn-close-file" @click="showNightActionModal = false">✖</button>
+      <div class="file-header">
+        {{ 
+          myRole === 'mafia' || myRole === 'mafia_don' ? 'ОБРАТИ ЖЕРТВУ СИНДИКАТУ' : 
+          myRole === 'doctor' ? 'ОБРАТИ ГРАВЦЯ ДЛЯ ЛІКУВАННЯ' : 
+          'ОБРАТИ ГРАВЦЯ ДЛЯ ПЕРЕВІРКИ' 
+        }}
+      </div>
+      
+      <div class="modal-players-list">
+        <div 
+          v-for="player in alivePlayers" 
+          :key="player.id" 
+          class="modal-player-row action-row" 
+          @click="performNightAction(player.id); showNightActionModal = false;"
+        >
+          <div class="row-avatar">#{{ player.id }}</div>
+          <div class="row-name">{{ player.name }}</div>
+          <div class="row-action-indicator night">🌃 Виконати дію</div>
+        </div>
+      </div>
+      <div class="file-actions">
+        <button class="btn-vote" @click="showNightActionModal = false">Згорнути</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ТОСТЫ / УВЕДОМЛЕНИЯ -->
+  <div class="notifications-container">
+    <transition-group name="toast">
+      <div 
+        v-for="notif in notifications" 
+        :key="notif.id" 
+        class="toast" 
+        :class="notif.type"
+      >
+        {{ notif.message }}
+      </div>
+    </transition-group>
   </div>
 </template>
 
@@ -272,7 +372,6 @@
 import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '@/services/api'
-import ThemeToggle from '@/components/ThemeToggle.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -293,21 +392,34 @@ const gamePhase = ref('waiting')
 const currentRound = ref(0)
 const myRole = ref(null)
 const otherMafia = ref([])
-const selectedPlayer = ref(null)
+const selectedPlayerForModal = ref(null) // Для детальной модалки игрока
 const showRoleModal = ref(false)
 const showVoteModal = ref(false)
 const showNightActionModal = ref(false)
 const isLeaving = ref(false)
-const mafiaMessages = ref([]) // Масив для зберігання повідомлень мафії
-const activeTab = ref('general') // Поточна відкрита вкладка
+const mafiaMessages = ref([])
+const activeTab = ref('general')
 const isMafia = computed(() => ['mafia', 'mafia_don'].includes(myRole.value))
 const hasCompletedNightAction = ref(false)
 
+const isAnyModalOpen = computed(() => {
+  return showRoleModal.value || selectedPlayerForModal.value || showVoteModal.value || showNightActionModal.value
+})
+
+const myPlayerObject = computed(() => {
+  const userId = currentUserId.value
+  return players.value.find(p => p.id === userId)
+})
+
+const otherPlayers = computed(() => {
+  const userId = currentUserId.value
+  return players.value.filter(p => p.id !== userId)
+})
+
 const setTab = (tab) => {
-  if (tab === 'mafia' && !isMafia.value) return // Захист: мирні не можуть відкрити
+  if (tab === 'mafia' && !isMafia.value) return
   activeTab.value = tab
   
-  // Прокручуємо чат вниз при зміні вкладки
   nextTick(() => {
     if (chatMessages.value) {
       chatMessages.value.scrollTop = chatMessages.value.scrollHeight
@@ -315,21 +427,27 @@ const setTab = (tab) => {
   })
 }
 
+const handlePlayerClick = (player) => {
+  selectedPlayerForModal.value = player
+}
+
+const closePlayerModal = () => {
+  selectedPlayerForModal.value = null
+}
+
 const progress = ref(0)
 let holdTimer = null
 let progressInterval = null
-const HOLD_DURATION = 1500 // 1.5 секунды
+const HOLD_DURATION = 1500
 
-// Тот самый предохранитель от ложного клика при отпускании руки
 let wasHoldCompleted = false
 
 const startHold = (e) => {
   if (isReady.value) return
-  
   if (e.type === 'touchstart') e.preventDefault()
 
   progress.value = 0
-  wasHoldCompleted = false // Сбрасываем при новом нажатии
+  wasHoldCompleted = false
   
   const tickRate = 30 
   const step = 100 / (HOLD_DURATION / tickRate)
@@ -347,7 +465,6 @@ const startHold = (e) => {
 
 const cancelHold = () => {
   if (isReady.value) return
-
   clearTimeout(holdTimer)
   clearInterval(progressInterval)
   progress.value = 0 
@@ -364,39 +481,26 @@ const completeHold = () => {
   
   progress.value = 100
   isReady.value = true 
-  wasHoldCompleted = true // Фиксируем готовность
+  wasHoldCompleted = true
 
-  // Отправляем true на бэкенд
   sendReadyStateToServer(true)
 
-  // ФИКС БАГА СО СДВИГОМ КНОПКИ:
-  // Принудительно сбрасываем предохранитель через 500 миллисекунд.
-  // За это время палец точно будет отпущен. Если кнопка "уехала" и клик 
-  // не сработал — мы не застрянем в состоянии блокировки.
   setTimeout(() => {
     wasHoldCompleted = false
   }, 500)
 }
 
-// Обработка клика (для отмены готовности)
 const handleClick = () => {
-  // БАГФИКС: Если кнопка только что перешла в "ready" через зажатие,
-  // этот клик — просто отпускание пальца человеком. Игнорируем его!
   if (wasHoldCompleted) {
     return
   }
-
-  // Если игрок ОСОЗНАННО делает короткий клик по уже готовой кнопке — отменяем
   if (isReady.value) {
     isReady.value = false
     progress.value = 0
-    
-    // Отправляем false на бэкенд
     sendReadyStateToServer(false)
   }
 }
 
-// Твоя оригинальная функция отправки, адаптированная под новые нужды
 const sendReadyStateToServer = (targetState) => {
   if (!ws.value || ws.value.readyState !== WebSocket.OPEN) {
     console.warn('WebSocket не підключено')
@@ -406,15 +510,12 @@ const sendReadyStateToServer = (targetState) => {
   const message = {
     type: 'toggle_ready',
     payload: {
-      is_ready: targetState // Передаем актуальное состояние (true или false)
+      is_ready: targetState
     }
   }
 
-  console.log('Sending ready toggle:', message)
-
   try {
     ws.value.send(JSON.stringify(message))
-    console.log('Ready state changed to:', targetState)
   } catch (error) {
     console.error('Помилка відправки статусу готовності:', error)
   }
@@ -442,7 +543,6 @@ const kickPlayer = (playerId) => {
   }
 };
 
-
 const showNotification = (message, type = 'info') => {
   const id = notifId++
   notifications.value.push({ id, message, type })
@@ -454,14 +554,13 @@ const showNotification = (message, type = 'info') => {
 
 const leaveRoom = () => {
   if (confirm('Ви впевнені, що хочете вийти з кімнати?')) {
-    isLeaving.value = true // <--- ТУТ ТЕЖ СТАВИМО
+    isLeaving.value = true
     if (ws.value) {
       ws.value.close(1000)
     }
     router.push('/rooms')
   }
 };
-
 
 const isOwner = computed(() => {
   const userId = parseInt(localStorage.getItem('userId'))
@@ -472,20 +571,11 @@ const canStartGame = computed(() => {
   const playersCount = players.value.length
   const minPlayers = room.value?.min_players_number || 6
   const allReady = players.value.every(p => p.is_ready)
-  
-  console.log('Can start game check:', {
-    playersCount,
-    minPlayers,
-    allReady,
-    canStart: playersCount >= minPlayers && allReady,
-    players: players.value.map(p => ({ id: p.id, name: p.name, is_ready: p.is_ready }))
-  })
-  
   return playersCount >= minPlayers && allReady
 })
 
 const alivePlayers = computed(() => {
-    return players.value.filter(player => player.is_alive)
+  return players.value.filter(player => player.is_alive)
 })
 
 const amIAlive = computed(() => {
@@ -495,20 +585,13 @@ const amIAlive = computed(() => {
 })
 
 const canPerformNightAction = computed(() => {
-    if (gamePhase.value !== 'night') return false
-    if (!myRole.value) return false
-    return ['mafia','mafia_don', 'doctor', 'detective'].includes(myRole.value)
+  if (gamePhase.value !== 'night') return false
+  if (!myRole.value) return false
+  return ['mafia','mafia_don', 'doctor', 'detective'].includes(myRole.value)
 })
 
 const canVote = computed(() => {
-    return gamePhase.value === 'day' && myRole.value
-})
-
-const gameStatus = computed(() => {
-    if (gamePhase.value === 'waiting') return 'Очікування гравців'
-    if (gamePhase.value === 'day') return 'Денна фаза'
-    if (gamePhase.value === 'night') return 'Нічна фаза'
-    return 'Гра завершена'
+  return gamePhase.value === 'day' && myRole.value
 })
 
 const fetchRoom = async () => {
@@ -516,11 +599,6 @@ const fetchRoom = async () => {
     const response = await api.get(`/api/rooms/${route.params.id}`)
     room.value = response.data
     roomOwner.value = response.data.owner
-    console.log('Room data updated:', {
-      room: room.value,
-      owner: roomOwner.value,
-      userId: localStorage.getItem('userId')
-    })
     await fetchPlayers()
   } catch (error) {
     console.error('Помилка отримання інформації про кімнату:', error)
@@ -536,12 +614,6 @@ const fetchPlayers = async () => {
       is_owner: player.id == room.value.owner,
       is_alive: player.is_alive ?? true
     }))
-    console.log('Players data:', players.value)
-    console.log('Can start game check:', {
-      playersCount: players.value.length,
-      minPlayers: room.value.min_players_number,
-      allReady: players.value.every(player => player.is_ready)
-    })
   } catch (error) {
     console.error('Помилка отримання списку гравців:', error)
   }
@@ -553,10 +625,10 @@ const fetchMessages = async () => {
     messages.value = response.data.map(msg => ({
       id: msg.id,
       username: msg.username,
-      text: msg.message,
+      message: msg.message,
+      type: msg.type || 'chat',
       timestamp: msg.created_at
     }))
-    // Прокручуємо чат вниз після завантаження повідомлень
     setTimeout(() => {
       if (chatMessages.value) {
         chatMessages.value.scrollTop = chatMessages.value.scrollHeight
@@ -569,7 +641,6 @@ const fetchMessages = async () => {
 
 const connectWebSocket = () => {
   if (ws.value && (ws.value.readyState === WebSocket.OPEN || ws.value.readyState === WebSocket.CONNECTING)) {
-    console.log('WebSocket already connected or connecting')
     return
   }
 
@@ -579,13 +650,11 @@ const connectWebSocket = () => {
 
   const token = localStorage.getItem('token')
   if (!token) {
-    console.error('No token found in localStorage')
     router.push('/login')
     return
   }
 
   if (!route.params.id) {
-    console.error('No room ID found')
     router.push('/rooms')
     return
   }
@@ -593,13 +662,11 @@ const connectWebSocket = () => {
   const backendHost = import.meta.env.VITE_API_URL.replace(/^https?:\/\//, '')
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const wsUrl = `${wsProtocol}//${backendHost}/api/ws/room/${route.params.id}?token=${token}`
-  console.log('Attempting WebSocket connection to:', wsUrl)
   
   try {
     ws.value = new WebSocket(wsUrl)
     
     ws.value.onopen = async () => {
-      console.log('WebSocket connected successfully')
       reconnectAttempts.value = 0
       if (reconnectTimeout.value) {
         clearTimeout(reconnectTimeout.value)
@@ -612,8 +679,6 @@ const connectWebSocket = () => {
     
     ws.value.onmessage = (event) => {
       try {
-        const data = JSON.parse(event.data)
-        console.log('Received WebSocket message:', data)
         handleWebSocketMessage(event)
       } catch (error) {
         console.error('Error parsing message:', error)
@@ -622,16 +687,10 @@ const connectWebSocket = () => {
     
     ws.value.onerror = (error) => {
       console.error('WebSocket error:', error)
-      if (error.target && error.target.readyState) {
-        console.log('WebSocket state at error:', error.target.readyState)
-      }
     }
     
     ws.value.onclose = (event) => {
-      console.log('WebSocket closed:', event.code, event.reason)
-
       if (isLeaving.value) {
-        console.log('Навмисний вихід. Подальша логіка onclose скасована.')
         return
       }
 
@@ -641,29 +700,19 @@ const connectWebSocket = () => {
       
       switch (event.code) {
         case 4000:
-          console.error('No token provided')
-          router.push('/login')
-          return
         case 4001:
-          console.error('Invalid token')
           router.push('/login')
           return
         case 4002:
-          console.error('Room not found')
-          router.push('/rooms')
-          return
         case 4003:
-          console.error('Failed to add player to room')
           router.push('/rooms')
           return
       }
       
       if (event.code !== 1000 && reconnectAttempts.value < maxReconnectAttempts && route.params.id) {
         reconnectAttempts.value++
-        console.log(`Reconnection attempt ${reconnectAttempts.value}/${maxReconnectAttempts}`)
         reconnectTimeout.value = setTimeout(connectWebSocket, 2000 * reconnectAttempts.value)
       } else if (reconnectAttempts.value >= maxReconnectAttempts) {
-        console.error('Maximum reconnection attempts reached')
         router.push('/rooms')
       }
     }
@@ -679,15 +728,10 @@ const connectWebSocket = () => {
 const handleWebSocketMessage = (event) => {
   try {
     const data = JSON.parse(event.data);
-    console.log('Received WebSocket message:', data);
     
     switch (data.type) {
       case 'game_over':
-        // Показываем большое уведомление о том, кто победил
         showNotification(data.message, data.winner === 'citizens' ? 'success' : 'error')
-        
-        // (Опционально) Можно обновить локальное состояние фазы, чтобы заблокировать кнопки действий
-        // gamePhase.value = 'game_over'
         break;
 
       case 'you_were_kicked':
@@ -700,11 +744,8 @@ const handleWebSocketMessage = (event) => {
         break;
 
       case 'roles_reveal':
-        // Формируем красивый список игроков с их реальными ролями
         let revealMessage = '🕵️‍♂️ СКЛАД КОМАНД:\n'
-        
         data.players.forEach(p => {
-          // Переводим роли на понятный язык с эмодзи
           let roleEmoji = '👨‍🌾 Мирний'
           if (p.role === 'mafia') roleEmoji = '🔫 Мафія'
           if (p.role === 'mafia_don') roleEmoji = '🔫 Мафія Дон'
@@ -714,8 +755,6 @@ const handleWebSocketMessage = (event) => {
           const status = p.is_alive ? '❤️ Живий' : '💀 Вбитий'
           revealMessage += `• ${p.name}: ${roleEmoji} (${status})\n`
         })
-        
-        // Выводим этот список в уведомление (или записываем в массив системных сообщений чата)
         showNotification(revealMessage, 'info')
         break;
 
@@ -727,11 +766,10 @@ const handleWebSocketMessage = (event) => {
       case 'player_killed_vote':
         showNotification(data.message, 'error')
         const killedId = data.target_id || data.player_id; 
-        
         if (killedId) {
           const victim = players.value.find(p => p.id === killedId);
           if (victim) {
-            victim.is_alive = false; // Vue миттєво перемалює картку
+            victim.is_alive = false;
           }
         }
         break;
@@ -750,14 +788,12 @@ const handleWebSocketMessage = (event) => {
         break;
 
       case 'room_state':
-        console.log('Room state update:', data);
         gamePhase.value = data.room.phase;
         currentRound.value = data.room.round;
         players.value = data.room.players;
         break;
 
       case 'player_joined':
-        console.log('Player joined:', data);
         players.value = data.players;
         messages.value.push({
           type: 'system',
@@ -766,7 +802,6 @@ const handleWebSocketMessage = (event) => {
         break;
 
       case 'player_left':
-        console.log('Player left:', data);
         players.value = data.players;
         messages.value.push({
           type: 'system',
@@ -775,7 +810,6 @@ const handleWebSocketMessage = (event) => {
         break;
 
       case 'player_ready':
-        console.log('Player ready state changed:', data);
         players.value = data.players;
         const player = players.value.find(p => p.id === data.player_id);
         if (player) {
@@ -787,23 +821,20 @@ const handleWebSocketMessage = (event) => {
         break;
 
       case 'role_assigned':
-        console.log('Role assigned:', data);
         myRole.value = data.role;
         showRoleModal.value = true;
         
         if (['mafia', 'mafia_don'].includes(data.role) && data.other_mafia) {
-            otherMafia.value = data.other_mafia;
-          }
+          otherMafia.value = data.other_mafia;
+        }
         
-        const roleMessage = {
+        messages.value.push({
           type: 'personal',
           message: `Ваша роль: ${data.role}`
-        };
-        messages.value.push(roleMessage);
+        });
         break;
 
       case 'game_started':
-        console.log('Game started:', data);
         gamePhase.value = data.phase;
         currentRound.value = data.round;
         isGameStarted.value = true;
@@ -815,7 +846,6 @@ const handleWebSocketMessage = (event) => {
         break;
 
       case 'phase_change':
-        console.log('Phase change:', data);
         gamePhase.value = data.phase;
         currentRound.value = data.round;
         hasCompletedNightAction.value = false;
@@ -833,7 +863,6 @@ const handleWebSocketMessage = (event) => {
         break;
 
       case 'chat':
-        console.log('Chat message:', data);
         messages.value.push({
           type: 'chat',
           username: data.username,
@@ -842,7 +871,6 @@ const handleWebSocketMessage = (event) => {
         break;
 
       case 'mafia_chat':
-        console.log('Mafia chat message:', data);
         mafiaMessages.value.push({
           type: 'mafia_chat',
           username: data.username,
@@ -851,7 +879,6 @@ const handleWebSocketMessage = (event) => {
         break;
 
       case 'system':
-        console.log('System message:', data);
         messages.value.push({
           type: 'system',
           message: data.message
@@ -859,7 +886,6 @@ const handleWebSocketMessage = (event) => {
         break;
 
       case 'error':
-        console.error('Error message:', data);
         messages.value.push({
           type: 'error',
           message: data.message
@@ -870,7 +896,6 @@ const handleWebSocketMessage = (event) => {
         console.warn('Unknown message type:', data.type);
     }
 
-    // Прокручуємо чат вниз після оновлення повідомлень
     nextTick(() => {
       const chatContainer = document.querySelector('.chat-messages');
       if (chatContainer) {
@@ -886,10 +911,7 @@ const sendMessage = () => {
   if (!newMessage.value.trim() || !ws.value) return
   
   if (ws.value.readyState === WebSocket.OPEN) {
-    
-    // Визначаємо тип події для бекенда залежно від обраної вкладки
     const targetType = activeTab.value === 'mafia' ? 'mafia_chat' : 'chat'
-
     const message = {
       type: targetType, 
       payload: {
@@ -907,71 +929,22 @@ const sendMessage = () => {
       }
     }
   } else {
-    console.warn('WebSocket не підключено')
     if (reconnectAttempts.value < maxReconnectAttempts) {
       connectWebSocket()
     }
   }
 }
 
-// const toggleReady = async () => {
-//   if (!ws.value || ws.value.readyState !== WebSocket.OPEN) {
-//     console.warn('WebSocket не підключено')
-//     return
-//   }
-  
-//   const message = {
-//     type: 'toggle_ready',
-//     payload: {
-//       is_ready: !isReady.value
-//     }
-//   }
-  
-//   console.log('Sending ready toggle:', message)
-  
-//   try {
-//     ws.value.send(JSON.stringify(message))
-//     isReady.value = !isReady.value
-//     console.log('Ready state changed to:', isReady.value)
-//   } catch (error) {
-//     console.error('Помилка відправки статусу готовності:', error)
-//   }
-// }
-
-const sendWebSocketMessage = async (message) => {
-  if (!ws.value || ws.value.readyState !== WebSocket.OPEN) {
-    console.warn('WebSocket не підключено')
-    throw new Error('WebSocket не підключено')
-  }
-  
-  try {
-    ws.value.send(JSON.stringify(message))
-  } catch (error) {
-    console.error('Помилка відправки повідомлення:', error)
-    throw error
-  }
-}
-
 const startGame = async () => {
-  if (!canStartGame.value) {
-    console.log('Cannot start game:', {
-      playersCount: players.value.length,
-      minPlayers: room.value?.min_players_number || 6,
-      allReady: players.value.every(p => p.is_ready)
-    })
-    return
-  }
-  
+  if (!canStartGame.value) return
   try {
     const message = {
       type: 'start_game',
       payload: {
         room_id: route.params.id
+      }
     }
-    }
-    console.log('Sending start game message:', message)
-      ws.value.send(JSON.stringify(message))
-      console.log('Start game message sent successfully')
+    ws.value.send(JSON.stringify(message))
   } catch (error) {
     console.error('Error starting game:', error)
   }
@@ -979,7 +952,6 @@ const startGame = async () => {
 
 const performNightAction = async (targetId) => {
   if (!myRole.value) return;
-  
   try {
     const message = {
       type: 'night_action',
@@ -992,14 +964,11 @@ const performNightAction = async (targetId) => {
     if (ws.value && ws.value.readyState === WebSocket.OPEN) {
       await ws.value.send(JSON.stringify(message));
       showNightActionModal.value = false;
-      // player.value.is_ready = True
       hasCompletedNightAction.value = true;
       messages.value.push({
         type: 'system',
         message: `Ви виконали нічну дію як ${myRole.value}`
       });
-    } else {
-      console.warn('WebSocket не підключено');
     }
   } catch (error) {
     console.error('Error performing night action:', error);
@@ -1015,12 +984,9 @@ const vote = async (targetId) => {
         target_id: targetId
       }
     }
-    
     if (ws.value && ws.value.readyState === WebSocket.OPEN) {
       ws.value.send(JSON.stringify(message))
       showVoteModal.value = false
-    } else {
-      console.warn('WebSocket не підключено')
     }
   } catch (error) {
     console.error('Error voting:', error)
@@ -1028,7 +994,6 @@ const vote = async (targetId) => {
 }
 
 onMounted(() => {
-  console.log('Component mounted')
   connectWebSocket()
   fetchMessages()
   fetchRoom()
@@ -1036,7 +1001,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   isLeaving.value = true
-
   if (ws.value) {
     ws.value.onclose = null
     ws.value.onerror = null
@@ -1053,718 +1017,1036 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.button.secondary {
-  background: var(--color-secondary);
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
-  width: 100%;
-}
-
-.button.secondary:hover {
-  background: var(--color-border);
-}
-
-.night-action-button {
-  background: #2c3e50 !important; /* Темно-синий "ночной" цвет */
-  color: #fff !important;
-  box-shadow: 0 0 15px rgba(52, 73, 94, 0.6) !important;
-}
-
-@keyframes pulse {
-  0% { transform: scale(1); box-shadow: 0 0 10px rgba(52, 73, 94, 0.5); }
-  50% { transform: scale(1.05); box-shadow: 0 0 20px rgba(52, 73, 94, 0.8); }
-  100% { transform: scale(1); box-shadow: 0 0 10px rgba(52, 73, 94, 0.5); }
-}
-
-.pulse-animation {
-  animation: pulse 2s infinite;
-}
 /* =========================================
-   СТИЛІ ВЬКЛАДОК ЧАТУ
+   ОБЩИЕ ПЕРЕМЕННЫЕ И ШРИФТЫ
    ========================================= */
-.chat-tabs {
+.newspaper-wrapper {
+  position: relative;
+  max-width: 1300px;
+  width: 100%;
+  margin: 40px auto;
+  z-index: 1;
+  filter: drop-shadow(0 25px 35px rgba(0, 0, 0, 0.8));
+  box-sizing: border-box;
+}
+
+/* Эффект многослойной старой бумаги за газетой */
+.newspaper-wrapper::before,
+.newspaper-wrapper::after {
+  content: '';
+  position: absolute;
+  background-color: var(--paper-shadow);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  transition: background-color 0.4s ease;
+}
+.newspaper-wrapper::before { top: 4px; left: -6px; right: 6px; bottom: -4px; transform: rotate(-0.5deg); z-index: -1; }
+.newspaper-wrapper::after { top: 8px; left: 4px; right: -8px; bottom: -3px; transform: rotate(0.8deg); z-index: -2; }
+
+.newspaper-main {
+  background-color: var(--paper-color);
+  padding: 35px 45px;
+  position: relative;
+  z-index: 2;
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.2);
+  font-family: var(--font-ui);
+  color: var(--ink-color);
+  transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+.newspaper-main,
+.hero-dossier,
+.room-status-badge,
+.phase-badge,
+.suspect-polaroid,
+.polaroid-img,
+.polaroid-name,
+.polaroid-overlay,
+.typewriter-chat,
+.chat-tabs .chat-tab,
+.chat-messages,
+.chat-input input,
+.chat-input button,
+.game-controls-panel,
+.hold-ready {
+  transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+/* Шум поверх основной подложки */
+.newspaper-main::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><filter id="noiseFilter"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/></filter><rect width="100%" height="100%" filter="url(%23noiseFilter)" opacity="0.04"/></svg>');
+  pointer-events: none;
+  z-index: 99;
+}
+
+
+
+/* =========================================
+   ГАЗЕТНЫЙ ХЕДЕР
+   ========================================= */
+.newspaper-header {
   display: flex;
-  gap: 5px;
-  margin-bottom: 10px;
-  border-bottom: 2px solid var(--color-border);
-  padding-bottom: 5px;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 5px double var(--ink-color);
+  border-bottom: 2px solid var(--ink-color);
+  padding: 20px 0;
+  margin-bottom: 35px;
+  flex-wrap: wrap;
+  gap: 20px;
 }
 
-.tab-btn {
-  background: transparent;
-  border: none;
-  color: var(--color-text);
-  padding: 8px 16px;
+.logo-block {
+  display: flex;
+  flex-direction: column;
+}
+
+.room-info-header {
+  padding: 10px 0;
+  margin-bottom: 25px;
+}
+
+.room-title {
+  font-family: var(--font-heading);
+  font-size: 2rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  color: var(--ink-color);
+  margin: 0;
+}
+
+.header-right { 
+  display: flex; 
+  align-items: center; 
+  gap: 20px; 
+  flex-wrap: wrap;
+}
+
+.room-status-badge {
+  font-family: var(--font-text);
   font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  border-radius: 6px 6px 0 0;
-  opacity: 0.6;
-  transition: all 0.2s;
+  border: 1px solid var(--ink-color);
+  padding: 5px 10px;
 }
 
-.tab-btn:hover {
-  opacity: 1;
-  background: rgba(255, 255, 255, 0.05);
+.phase-badge {
+  font-family: var(--font-text);
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: var(--accent-color);
 }
 
-.tab-btn.active {
-  opacity: 1;
-  color: var(--color-accent);
-  background: var(--color-secondary);
-  border-bottom: 2px solid var(--color-accent);
+.night-phase-pulse {
+  animation: pulse-night-badge 2s infinite;
 }
 
-.mafia-tab.active {
-  color: #ff4757;
-  border-bottom: 2px solid #ff4757;
-  background: rgba(255, 71, 87, 0.1);
+@keyframes pulse-night-badge { 
+  0% { opacity: 1; } 
+  50% { opacity: 0.4; } 
+  100% { opacity: 1; } 
 }
 
-/* Коли увімкнено режим мафії, трохи фарбуємо рамку всього чату */
-.game-chat.mafia-mode {
-  border: 1px solid rgba(255, 71, 87, 0.3);
-  box-shadow: 0 0 15px rgba(255, 71, 87, 0.1);
+/* =========================================
+   СЕТКА КОНТЕНТА
+   ========================================= */
+.content-grid {
+  display: grid; 
+  grid-template-columns: 2.5fr 1.5fr; 
+  gap: 40px;
+  margin-bottom: 40px;
 }
 
-/* Стиль секретних повідомлень */
-.mafia-msg {
-  background: rgba(255, 71, 87, 0.1) !important;
-  border-left: 3px solid #ff4757;
+.section-title {
+  font-family: var(--font-heading); 
+  font-size: 1.8rem; 
+  text-transform: uppercase;
+  border-bottom: 2px solid var(--ink-color); 
+  padding-bottom: 5px; 
+  margin-bottom: 25px;
+  color: var(--ink-color);
 }
 
-.mafia-sender {
-  color: #ff4757 !important;
+/* =========================================
+   ДОСЬЕ ТЕКУЩЕГО ИГРОКА (ДЕЛЮКС ОФОРМЛЕНИЕ)
+   ========================================= */
+.hero-dossier {
+  background-color: var(--paper-color); 
+  padding: 20px;
+  border: 1px solid var(--ink-color);
+  box-shadow: 10px 10px 20px rgba(0,0,0,0.4), inset 0 0 40px rgba(0,0,0,0.05);
+  position: relative; 
+  transform: rotate(-1deg);
+  transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease, transform 0.4s ease, box-shadow 0.4s ease;
+  display: flex; 
+  gap: 20px; 
+  margin-bottom: 40px;
+  z-index: 5;
+}
+
+.hero-dossier:hover {
+  transform: rotate(0deg) scale(1.02) translateY(-5px);
+  box-shadow: 15px 15px 30px rgba(0,0,0,0.6);
+}
+
+.dossier-photo-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.dossier-photo {
+  width: 140px; 
+  height: 180px; 
+  flex-shrink: 0;
+  background: var(--ink-color); 
+  border: 4px solid var(--paper-color);
+  box-shadow: 0 0 0 1px var(--ink-color);
+  background-image: repeating-radial-gradient(circle at 50% 50%, transparent 0, transparent 4px, rgba(255,255,255,0.05) 5px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: var(--paper-color);
+  font-family: var(--font-heading);
+  font-size: 2rem;
   font-weight: bold;
 }
 
-/* Стиль заблокованого інпуту (ніч) */
+.dossier-info { 
+  font-family: var(--font-text); 
+  font-size: 0.9rem; 
+  line-height: 1.5; 
+  color: var(--ink-color);
+}
+
+.dossier-info h3 { 
+  font-family: var(--font-heading); 
+  font-size: 1.6rem; 
+  text-transform: uppercase; 
+  margin-bottom: 10px;
+}
+
+.dossier-info ul { 
+  margin-top: 10px; 
+  list-style: square inside; 
+}
+
+/* Штамп роли */
+.stamp-role {
+  position: absolute; 
+  bottom: 15px; 
+  right: 15px;
+  font-family: var(--font-heading); 
+  font-size: 2.2rem; 
+  font-weight: 900;
+  color: var(--accent-color); 
+  border: 4px solid var(--accent-color);
+  padding: 5px 20px; 
+  border-radius: 5px; 
+  text-transform: uppercase;
+  transform: rotate(-15deg);
+  opacity: 0.95;
+  pointer-events: none;
+  background-color: var(--paper-color);
+}
+
+/* =========================================
+   ПОЛАРОИДНЫЕ СНИМКИ (ПОДОЗРЕВАЕМЫЕ)
+   ========================================= */
+.suspects-area {
+  display: flex; 
+  flex-wrap: wrap; 
+  gap: 25px; 
+  padding-top: 10px;
+}
+
+.suspect-polaroid {
+  background: var(--paper-color); 
+  width: 160px; 
+  height: 200px;
+  padding: 10px 10px 20px 10px; 
+  border: 1px solid rgba(0,0,0,0.2);
+  box-shadow: 5px 10px 15px rgba(0,0,0,0.4);
+  display: flex; 
+  flex-direction: column; 
+  position: relative; 
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.25, 1.5, 0.5, 1);
+}
+
+/* Случайный поворот для эффекта разбросанных снимков */
+.suspect-polaroid:nth-child(odd) { transform: rotate(-3deg); }
+.suspect-polaroid:nth-child(even) { transform: rotate(4deg) translateY(-5px); }
+
+.suspect-polaroid:hover {
+  transform: rotate(0deg) scale(1.15) translateY(-15px) !important;
+  box-shadow: 0 25px 35px rgba(0,0,0,0.6); 
+  z-index: 50;
+}
+
+.polaroid-img {
+  flex-grow: 1; 
+  background: var(--ink-color); 
+  margin-bottom: 10px; 
+  position: relative; 
+  overflow: hidden;
+}
+
+.polaroid-id-badge {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  padding: 2px 6px;
+  font-size: 0.7rem;
+  font-family: var(--font-text);
+}
+
+.polaroid-overlay {
+  position: absolute; 
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(43, 43, 43, 0.8); 
+  display: flex; 
+  justify-content: center; 
+  align-items: center;
+  font-family: var(--font-heading); 
+  font-size: 1.1rem; 
+  color: #fff; 
+  font-weight: bold;
+  text-transform: uppercase; 
+  opacity: 0; 
+  transition: opacity 0.3s;
+  border: 2px dashed rgba(255,255,255,0.5);
+  text-align: center;
+}
+
+
+
+.suspect-polaroid:hover .polaroid-overlay { 
+  opacity: 1; 
+}
+
+.polaroid-name { 
+  font-family: var(--font-text); 
+  font-size: 0.9rem; 
+  font-weight: bold; 
+  text-align: center; 
+  text-transform: uppercase; 
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink-color);
+}
+
+/* Значки поверх полароида */
+.polaroid-badges {
+  position: absolute;
+  bottom: 25px;
+  right: 12px;
+  display: flex;
+  gap: 5px;
+}
+
+.badge-owner-icon,
+.badge-ready-icon {
+  background: rgba(0,0,0,0.7);
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+}
+
+/* Ликвидированные (мертвые) игроки */
+.suspect-polaroid.dead { 
+  filter: grayscale(100%); 
+}
+
+.suspect-polaroid.dead::after {
+  content: 'ЛІКВІДОВАНИЙ'; 
+  position: absolute; 
+  top: 40%; 
+  left: -10px; 
+  width: 120%;
+  font-family: var(--font-heading); 
+  font-size: 1.1rem; 
+  font-weight: bold; 
+  color: var(--accent-color);
+  border-top: 2px solid; 
+  border-bottom: 2px solid; 
+  text-align: center; 
+  transform: rotate(-20deg);
+  background: rgba(255, 255, 255, 0.95); 
+  padding: 5px 0; 
+  box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+  z-index: 5;
+}
+
+
+/* Кнопка кика внутри полароида */
+.kick-button-polaroid {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: var(--accent-color);
+  border: 1px solid var(--ink-color);
+  color: #fff;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s;
+  z-index: 20;
+}
+
+.kick-button-polaroid:hover {
+  transform: scale(1.2);
+}
+
+/* =========================================
+   ПИШУЩАЯ МАШИНКА (ИГРОВОЙ ЧАТ)
+   ========================================= */
+.typewriter-chat {
+  background: var(--paper-color); 
+  border: 1px solid var(--ink-color);
+  box-shadow: 8px 8px 15px rgba(0,0,0,0.4);
+  display: flex; 
+  flex-direction: column; 
+  height: 100%; 
+  min-height: 550px;
+  position: relative; 
+  transform: rotate(0.5deg);
+}
+
+.typewriter-chat::before {
+  content: ''; 
+  position: absolute; 
+  top: -12px; 
+  left: -5px; 
+  right: -5px; 
+  height: 20px;
+  background: #111; 
+  border-radius: 4px; 
+  box-shadow: inset 0 -3px 8px rgba(255,255,255,0.2), 0 5px 10px rgba(0,0,0,0.5); 
+  z-index: 10;
+}
+
+.chat-tabs { 
+  display: flex; 
+  margin-top: 20px; 
+  border-bottom: 2px solid var(--ink-color); 
+}
+
+.chat-tab {
+  flex: 1; 
+  text-align: center; 
+  padding: 12px; 
+  font-family: var(--font-text); 
+  font-weight: bold;
+  cursor: pointer; 
+  text-transform: uppercase; 
+  background: var(--card-bg); 
+  opacity: 0.6; 
+  transition: 0.3s;
+  color: var(--ink-color);
+  user-select: none;
+}
+
+.chat-tab.active { 
+  opacity: 1; 
+  background: transparent; 
+  border-bottom: 3px solid var(--accent-color); 
+}
+
+.mafia-tab.active {
+  color: var(--accent-color);
+}
+
+.typewriter-chat.mafia-mode {
+  border-color: var(--accent-color);
+}
+
+.chat-messages {
+  flex-grow: 1; 
+  padding: 20px; 
+  overflow-y: auto;
+  font-family: var(--font-text); 
+  font-size: 0.95rem; 
+  line-height: 1.6;
+  display: flex; 
+  flex-direction: column; 
+  gap: 15px;
+  max-height: 420px;
+  background: transparent;
+}
+
+.msg { 
+  position: relative; 
+  padding-left: 15px; 
+  border-bottom: 1px dashed rgba(0,0,0,0.1); 
+  padding-bottom: 10px;
+  color: var(--ink-color);
+}
+
+
+.msg::before { 
+  content: '►'; 
+  position: absolute; 
+  left: 0; 
+  color: var(--accent-color); 
+  font-size: 0.6rem; 
+  top: 5px; 
+}
+
+.msg strong { 
+  font-family: var(--font-heading); 
+  font-size: 1.1rem; 
+}
+
+/* Системные и Личные типы сообщений */
+.msg.isPersonal {
+  background: rgba(107, 33, 33, 0.08);
+  border-left: 3px solid var(--accent-color);
+  padding-left: 10px;
+  font-weight: bold;
+}
+
+.msg.isSystem {
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.system-message-text {
+  color: var(--accent-color);
+  font-weight: bold;
+}
+
+.msg.isError {
+  border-left: 3px solid #f44336;
+  background: rgba(244, 67, 54, 0.05);
+  padding-left: 10px;
+}
+
+.error-message-text {
+  color: #f44336;
+  font-weight: bold;
+}
+
+/* Чат мафии */
+.mafia-msg {
+  background: rgba(107, 33, 33, 0.05);
+  border-left: 3px solid var(--accent-color);
+  padding-left: 10px;
+}
+
+/* Форма отправки в стиле пишущей машинки */
+.chat-input { 
+  padding: 15px; 
+  border-top: 2px dashed var(--ink-color); 
+  display: flex; 
+  background: rgba(0,0,0,0.02); 
+}
+
+.chat-input input {
+  flex-grow: 1; 
+  background: transparent; 
+  border: none; 
+  outline: none; 
+  border-bottom: 1px solid var(--ink-color);
+  font-family: var(--font-text); 
+  font-size: 1rem; 
+  color: var(--ink-color); 
+  padding: 5px;
+}
+
+.chat-input button {
+  background: var(--ink-color); 
+  color: var(--paper-color); 
+  border: none; 
+  padding: 5px 20px;
+  font-family: var(--font-text); 
+  font-weight: bold; 
+  cursor: pointer; 
+  text-transform: uppercase; 
+  margin-left: 15px;
+  transition: all 0.2s;
+}
+
+.chat-input button:hover:not(:disabled) { 
+  background: var(--accent-color); 
+}
+
+.chat-input button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .disabled-input {
-  background: rgba(0, 0, 0, 0.2) !important;
-  border-color: #555 !important;
-  color: #888 !important;
   cursor: not-allowed;
   font-style: italic;
 }
 
-@keyframes pulse {
-  0% { opacity: 0.7; }
-  50% { opacity: 1; text-shadow: 0 0 8px #ff4757; }
-  100% { opacity: 0.7; }
+/* =========================================
+   ПАНЕЛЬ КНОПОК УПРАВЛЕНИЯ
+   ========================================= */
+.game-controls-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  justify-content: center;
+  border-top: 2px solid var(--ink-color);
+  padding-top: 25px;
+  margin-top: 25px;
 }
 
-.pulse-animation {
-  animation: pulse 2s infinite;
+.btn-newspaper-control {
+  background: transparent; 
+  border: 2px solid var(--ink-color);
+  color: var(--ink-color); 
+  padding: 10px 20px; 
+  font-family: var(--font-text);
+  cursor: pointer; 
+  text-transform: uppercase; 
+  font-weight: bold;
+  transition: all 0.3s ease; 
+  box-shadow: 4px 4px 0 var(--ink-color);
+  font-size: 0.95rem;
 }
 
+.btn-newspaper-control:hover:not(:disabled) {
+  transform: translate(2px, 2px); 
+  box-shadow: 2px 2px 0 var(--ink-color);
+  background: var(--ink-color); 
+  color: var(--paper-color);
+}
 
-.hold-button {
+.btn-newspaper-control.danger {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+  box-shadow: 4px 4px 0 var(--accent-color);
+}
+
+.btn-newspaper-control.danger:hover {
+  background: var(--accent-color);
+  color: #fff;
+}
+
+.btn-newspaper-control.night-action {
+  border-color: #3f51b5;
+  color: #3f51b5;
+  box-shadow: 4px 4px 0 #3f51b5;
+}
+
+.btn-newspaper-control.night-action:hover {
+  background: #3f51b5;
+  color: #fff;
+}
+
+.btn-newspaper-control.vote-action {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+  box-shadow: 4px 4px 0 var(--accent-color);
+}
+
+.btn-newspaper-control.vote-action:hover {
+  background: var(--accent-color);
+  color: #fff;
+}
+
+/* Кнопка с удержанием */
+.btn-newspaper-control.hold-ready {
   position: relative;
-  overflow: hidden;    
-  user-select: none;   
+  overflow: hidden;
+  user-select: none;
   -webkit-user-select: none;
-  cursor: pointer;
-  transition: background-color 0.2s, transform 0.1s;
-}
-
-.hold-button:active:not(.ready) {
-  transform: scale(0.97);
 }
 
 .hold-progress {
   position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  background-color: rgba(46, 204, 113, 0.4); /* Полупрозрачный зеленый */
-  transition: width 0.03s linear;            
+  top: 0; left: 0; height: 100%;
+  background-color: rgba(76, 175, 80, 0.3);
+  transition: width 0.03s linear;
   z-index: 1;
+}
+
+.btn-newspaper-control.hold-ready.ready {
+  background: #4caf50;
+  color: #fff;
+  border-color: #4caf50;
+}
+
+.btn-newspaper-control.hold-ready.ready:hover {
+  background: var(--accent-color);
+  border-color: var(--accent-color);
 }
 
 .button-text {
   position: relative;
-  z-index: 2; 
+  z-index: 2;
 }
 
-/* Стили под твой класс .ready из старого кода */
-.hold-button.ready {
-  background-color: #2ec871 !important; 
-  color: white;
+/* Старт игры владельца */
+.btn-newspaper-control.start-game {
+  border-color: #ff9800;
+  color: #ff9800;
+  box-shadow: 4px 4px 0 #ff9800;
 }
 
-/* Меняем цвет на красный при наведении, только когда игрок готов (намек на отмену) */
-.hold-button.ready:hover {
-  background-color: #e74c3c !important; 
+.btn-newspaper-control.start-game:hover {
+  background: #ff9800;
+  color: #fff;
+}
+
+.start-game-waiting {
+  display: flex;
+  align-items: center;
+  font-family: var(--font-text);
+  font-size: 0.95rem;
+  border: 1px dashed var(--ink-color);
+  padding: 5px 15px;
 }
 
 /* =========================================
-   СИСТЕМА СПОВІЩЕНЬ (TOASTS)
+   МОДАЛЬНЫЕ ОКНА (ДЕЛЮКС СТИЛИЗАЦИЯ)
+   ========================================= */
+.wow-modal-overlay {
+  position: fixed; 
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.85); 
+  backdrop-filter: blur(8px);
+  display: none; 
+  justify-content: center; 
+  align-items: center; 
+  z-index: 1000;
+}
+
+.wow-modal-overlay.active {
+  display: flex;
+}
+
+.suspect-file-modal {
+  background: var(--paper-color);
+  border: 2px solid var(--ink-color);
+  width: 90%; 
+  max-width: 650px;
+  padding: 30px;
+  box-shadow: 15px 15px 40px rgba(0,0,0,0.8);
+  position: relative;
+  box-sizing: border-box;
+  animation: modal-slam 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.15) forwards;
+}
+
+@keyframes modal-slam {
+  from { transform: scale(0.8) rotate(-5deg); opacity: 0; }
+  to { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+/* Скрепка на досье */
+.suspect-file-modal::before {
+  content: ''; 
+  position: absolute; 
+  top: -15px; 
+  left: 50%; 
+  transform: translateX(-50%) rotate(5deg);
+  width: 30px; 
+  height: 80px; 
+  border: 4px solid #888; 
+  border-radius: 15px;
+  box-shadow: 2px 2px 5px rgba(0,0,0,0.5); 
+  z-index: 10;
+}
+
+.file-header {
+  font-family: var(--font-heading); 
+  font-size: 1.8rem; 
+  text-transform: uppercase;
+  border-bottom: 3px double var(--ink-color); 
+  padding-bottom: 10px; 
+  margin-bottom: 20px;
+  text-align: center; 
+  letter-spacing: 2px;
+  color: var(--ink-color);
+}
+
+.file-content { 
+  display: flex; 
+  gap: 25px; 
+  margin-bottom: 30px; 
+}
+
+.file-photo-placeholder {
+  width: 150px; 
+  height: 180px; 
+  background: var(--ink-color); 
+  flex-shrink: 0;
+  border: 5px solid var(--paper-color); 
+  box-shadow: 0 0 0 1px var(--ink-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--paper-color);
+  font-family: var(--font-heading);
+  font-size: 1.8rem;
+}
+
+.placeholder-id {
+  opacity: 0.5;
+}
+
+.file-details { 
+  font-family: var(--font-text); 
+  font-size: 1rem; 
+  line-height: 1.6; 
+  flex-grow: 1; 
+  color: var(--ink-color);
+}
+
+.file-details h4 { 
+  font-family: var(--font-heading); 
+  font-size: 1.5rem; 
+  margin-bottom: 15px; 
+  color: var(--accent-color); 
+}
+
+.file-details p { 
+  margin-bottom: 10px; 
+  border-bottom: 1px dashed rgba(0,0,0,0.2); 
+  padding-bottom: 5px;
+}
+
+
+.role-highlight {
+  text-decoration: underline;
+}
+
+.other-mafia-box {
+  margin-top: 15px;
+  padding: 10px;
+  background: rgba(107, 33, 33, 0.05);
+  border: 1px solid var(--accent-color);
+}
+
+.other-mafia-box h5 {
+  font-family: var(--font-heading);
+  font-size: 1.1rem;
+  color: var(--accent-color);
+  margin-bottom: 5px;
+}
+
+.other-mafia-box ul {
+  list-style: none;
+  padding: 0;
+}
+
+/* Действия в модальном окне */
+.file-actions {
+  display: flex; 
+  gap: 15px; 
+  justify-content: flex-end; 
+  border-top: 2px solid var(--ink-color); 
+  padding-top: 20px;
+}
+
+.btn-vote {
+  background: transparent; 
+  color: var(--ink-color); 
+  border: 2px solid var(--ink-color);
+  padding: 10px 20px; 
+  font-family: var(--font-text); 
+  font-weight: bold; 
+  cursor: pointer; 
+  text-transform: uppercase;
+  transition: all 0.2s; 
+  box-shadow: 4px 4px 0 var(--ink-color);
+}
+
+.btn-vote:hover { 
+  background: var(--ink-color); 
+  color: var(--paper-color); 
+  transform: translate(2px, 2px); 
+  box-shadow: 2px 2px 0 var(--ink-color); 
+}
+
+.btn-night-action {
+  background: var(--accent-color); 
+  color: #fff; 
+  border: 2px solid var(--accent-color);
+  padding: 10px 20px; 
+  font-family: var(--font-text); 
+  font-weight: bold; 
+  cursor: pointer; 
+  text-transform: uppercase;
+  transition: all 0.2s; 
+  box-shadow: 4px 4px 0 rgba(0,0,0,0.5);
+}
+
+.btn-night-action:hover { 
+  background: #8b0000; 
+  transform: translate(2px, 2px); 
+  box-shadow: 2px 2px 0 rgba(0,0,0,0.5); 
+}
+
+.btn-close-file {
+  position: absolute; 
+  top: 15px; 
+  right: 15px; 
+  background: transparent; 
+  border: none; 
+  font-size: 1.5rem; 
+  cursor: pointer; 
+  color: var(--ink-color);
+  z-index: 50;
+}
+
+/* =========================================
+   СПИСКИ ИГРОКОВ В МОДАЛКАХ (ДЛЯ ГОЛОСОВАНИЙ)
+   ========================================= */
+.vote-description {
+  font-family: var(--font-text);
+  text-align: center;
+  margin-bottom: 20px;
+  color: var(--ink-color);
+}
+
+.modal-players-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 25px;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.modal-player-row {
+  display: flex;
+  align-items: center;
+  padding: 12px 15px;
+  border: 1px solid var(--ink-color);
+  cursor: pointer;
+  transition: all 0.2s;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.modal-player-row:hover {
+  background: var(--ink-color);
+  color: var(--paper-color);
+}
+
+.row-avatar {
+  font-family: var(--font-heading);
+  font-weight: bold;
+  margin-right: 15px;
+  font-size: 1.1rem;
+}
+
+.row-name {
+  font-family: var(--font-text);
+  font-size: 1.05rem;
+  flex-grow: 1;
+}
+
+.row-action-indicator {
+  font-family: var(--font-text);
+  font-size: 0.9rem;
+  font-weight: bold;
+}
+
+.modal-player-row:hover .row-action-indicator {
+  text-decoration: underline;
+}
+
+/* =========================================
+   СИСТЕМА ТОСТОВ (УВЕДОМЛЕНИЙ)
    ========================================= */
 .notifications-container {
   position: fixed;
-  top: 80px; /* Трохи нижче шапки */
+  top: 80px;
   right: 20px;
   z-index: 9999;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  pointer-events: none; /* Щоб кліки проходили крізь контейнер */
+  pointer-events: none;
 }
 
 .toast {
-  padding: 12px 20px;
-  border-radius: var(--border-radius-md, 8px);
-  color: #fff;
-  font-weight: 500;
-  font-size: 0.95rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  padding: 15px 25px;
+  border: 1px solid var(--ink-color);
+  background: var(--paper-color);
+  color: var(--ink-color);
+  font-family: var(--font-text);
+  box-shadow: 8px 8px 0 rgba(0,0,0,0.5);
   pointer-events: auto;
-  min-width: 250px;
-  max-width: 350px;
+  min-width: 280px;
+  max-width: 380px;
   line-height: 1.4;
 }
 
-/* Кольори для різних типів повідомлень (використовуємо твої змінні з theme.css) */
-.toast.info { background-color: var(--info-color, #3498db); }
-.toast.success { background-color: var(--success-color, #2ecc71); }
-.toast.error { background-color: var(--error-color, #e74c3c); }
-.toast.warning { 
-  background-color: var(--warning-color, #f1c40f); 
-  color: #2c3e50; /* Темний текст на жовтому фоні для контрасту */
+.toast.success {
+  border-color: #2ecc71;
+  background: rgba(46, 204, 113, 0.1);
+  color: #27ae60;
 }
 
-/* Анімації появи та зникнення (Vue <transition-group>) */
+.toast.error {
+  border-color: var(--accent-color);
+  background: rgba(107, 33, 33, 0.1);
+  color: var(--accent-color);
+}
+
+.toast.warning {
+  border-color: #f1c40f;
+  background: rgba(241, 196, 15, 0.1);
+  color: #d35400;
+}
+
+/* Анимация тостов */
 .toast-enter-active,
 .toast-leave-active {
-  transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55); /* Ефект "пружинки" */
+  transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
 }
 
-.toast-enter-from {
-  opacity: 0;
-  transform: translateX(100%);
-}
-
+.toast-enter-from,
 .toast-leave-to {
   opacity: 0;
   transform: translateX(100%);
 }
 
-.game-room {
-  font-family: var(--font-main);
-  background: var(--color-bg);
-  color: var(--color-text);
-  min-height: 100vh;
-  padding: 0;
-  margin: 0;
-  transition: background var(--transition), color var(--transition);
-}
-.game-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 2rem 2rem 1rem 2rem;
-  background: var(--color-card);
-  box-shadow: var(--color-shadow);
-  border-bottom: 2px solid var(--color-accent);
-}
-.game-header h1 {
-  font-family: 'Bebas Neue', 'Montserrat', cursive;
-  font-size: 2.5rem;
-  letter-spacing: 2px;
-  color: var(--color-accent);
-  text-shadow: 0 2px 12px var(--color-accent-glow);
-  margin: 0;
-}
-
-.danger-button { 
-  background-color: #e74c3c !important; 
-  color: white; 
-}
-
-.room-status {
-  font-size: 1.1rem;
-  color: var(--color-text);
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-.owner-badge {
-  background: var(--color-owner);
-  color: #222;
-  padding: 2px 10px;
-  border-radius: 6px;
-  font-weight: bold;
-  margin-left: 1rem;
-  box-shadow: 0 0 8px #ff1744cc;
-}
-.game-content {
-  display: flex;
-  gap: 2rem;
-  padding: 2rem;
-  justify-content: center;
-}
-.players-list {
-  background: var(--color-card);
-  border-radius: 16px;
-  box-shadow: var(--color-shadow);
-  padding: 1.5rem;
-  min-width: 300px;
-  max-width: 340px;
-  flex-shrink: 0;
-}
-.players-list h2 {
-  color: var(--color-accent);
-  margin-bottom: 1rem;
-  font-size: 1.3rem;
-  letter-spacing: 1px;
-}
-.players-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-.player-card {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  padding: 14px 18px;
-  border-radius: 10px;
-  background: var(--color-secondary);
-  box-shadow: 0 2px 12px #0004;
-  border: 2px solid transparent;
-  transition: border var(--transition), box-shadow var(--transition), background var(--transition), opacity .3s;
-  position: relative;
-  animation: fadeIn .7s;
-}
-.player-card:hover {
-  border: 2px solid var(--color-accent);
-  box-shadow: 0 0 16px var(--color-accent-glow);
-}
-.player-card.dead {
-  opacity: 0.5;
-  background: var(--color-dead);
-  border: 2px solid var(--color-danger);
-  text-decoration: line-through;
-}
-.player-avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: var(--color-avatar);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  font-size: 1.5rem;
-  border: 2px solid var(--color-accent);
-  box-shadow: 0 0 12px var(--color-accent-glow);
-  transition: box-shadow var(--transition);
-}
-.player-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.player-name {
-  font-weight: 700;
-  color: var(--color-text);
-  font-size: 1.15rem;
-  letter-spacing: 1px;
-}
-.player-status {
-  display: flex;
-  gap: 8px;
-  margin-top: 2px;
-}
-.ready-badge {
-  background: var(--color-success);
-  color: #fff;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 0.9em;
-  font-weight: bold;
-  box-shadow: 0 0 8px #43a04799;
-}
-.dead-badge {
-  background: var(--color-danger);
-  color: #fff;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 0.9em;
-  font-weight: bold;
-  box-shadow: 0 0 8px #e5393599;
-}
-.game-chat {
-  flex: 1;
-  background: var(--color-card);
-  border-radius: 16px;
-  box-shadow: var(--color-shadow);
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  min-width: 350px;
-}
-.chat-messages {
-  flex: 1;
-  overflow-y: auto;
-  margin-bottom: 1.5rem;
-  padding: 1rem;
-  background: var(--color-chat-bg);
-  border-radius: 10px;
-  box-shadow: 0 1px 8px #0002;
-  font-size: 1.05rem;
-  max-height: 350px;
-  scroll-behavior: smooth;
-}
-.message {
-  margin-bottom: 10px;
-  animation: fadeIn .5s;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: var(--color-chat-bg);
-}
-.message.isPersonal {
-  background: var(--color-accent);
-  color: white;
-  font-weight: bold;
-  border: 2px solid var(--color-accent-glow);
-  box-shadow: 0 0 12px var(--color-accent-glow);
-}
-.message-sender {
-  font-weight: 600;
-  margin-right: 8px;
-  color: var(--color-accent);
-}
-.message-system {
-  color: var(--color-chat-system);
-  font-style: italic;
-  text-shadow: 0 0 8px var(--color-accent-glow);
-}
-.chat-input {
-  display: flex;
-  gap: 10px;
-}
-.input {
-  flex: 1;
-  padding: 10px 14px;
-  border: 1.5px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-secondary);
-  color: var(--color-text);
-  font-size: 1.1rem;
-  transition: border var(--transition), background var(--transition);
-}
-.input:focus {
-  border: 1.5px solid var(--color-accent);
-  background: var(--color-card);
-  outline: none;
-}
-.button {
-  padding: 12px 28px;
-  border: none;
-  border-radius: 8px;
-  background: var(--color-btn);
-  color: var(--color-btn-text);
-  font-size: 1.1rem;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: 0 2px 12px #d32f2f33;
-  transition: background var(--transition), box-shadow var(--transition), transform .1s;
-  margin: 0 4px;
-  letter-spacing: 1px;
-}
-.button:hover, .button:focus {
-  background: var(--color-btn-hover);
-  box-shadow: 0 4px 24px var(--color-accent-glow);
-  transform: translateY(-2px) scale(1.04);
-}
-.button.ready {
-  background: var(--color-success);
-}
-.button.start-game {
-  background: var(--color-owner);
-  color: #222;
-  font-size: 1.15rem;
-  font-weight: bold;
-  box-shadow: 0 0 16px #ffd60099;
-}
-.button:disabled, .button[disabled] {
-  background: #888;
-  color: #eee;
-  cursor: not-allowed;
-  opacity: 0.7;
-  box-shadow: none;
-}
-.game-controls {
-  margin-top: 2rem;
-  display: flex;
-  gap: 18px;
-  justify-content: center;
-}
-.start-game-button {
-  background: #ff0000 !important;
-  color: white !important;
-  padding: 10px 20px !important;
-  border: none !important;
-  border-radius: 5px !important;
-  cursor: pointer !important;
-  margin-left: 10px !important;
-  font-size: 16px !important;
-  font-weight: bold !important;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
-}
-
-.start-game-button:hover {
-  background: #cc0000 !important;
-  transform: translateY(-2px) !important;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;
-}
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px);}
-  to { opacity: 1; transform: none;}
-}
-
-.game-phase {
-  display: flex;
-  gap: 10px;
-}
-
-.modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.modal-content {
-  background: white;
-  padding: 20px;
-  border-radius: 8px;
-  min-width: 300px;
-}
-
-.vote-options, .night-actions {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 10px;
-  margin: 15px 0;
-}
-
-.vote-option, .action-option {
-  padding: 10px;
-  background: #f5f5f5;
-  border-radius: 4px;
-  cursor: pointer;
-  text-align: center;
-}
-
-.vote-option:hover, .action-option:hover {
-  background: #e0e0e0;
-}
-
-.other-mafia {
-  margin-top: 15px;
-  padding: 10px;
-  background: rgba(255, 0, 0, 0.1);
-  border-radius: 5px;
-}
-
-.other-mafia h4 {
-  color: #ff0000;
-  margin-bottom: 10px;
-}
-
-.other-mafia ul {
-  list-style: none;
-  padding: 0;
-}
-
-.other-mafia li {
-  padding: 5px 0;
-  color: #ff0000;
-  font-weight: bold;
-}
-
-.vote-button {
-  background: var(--color-accent);
-  color: white;
-  font-weight: bold;
-  box-shadow: 0 0 12px var(--color-accent-glow);
-}
-
-.vote-description {
-  color: var(--color-text);
-  margin-bottom: 1rem;
-  text-align: center;
-}
-
-.vote-option {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  background: var(--color-secondary);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.vote-option:hover {
-  background: var(--color-accent);
-  color: white;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px var(--color-accent-glow);
-}
-
-.vote-option-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--color-avatar);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  font-size: 1.1rem;
-}
-
-.vote-option-name {
-  font-weight: 500;
-}
-
-.message.isSystem {
-  background: var(--color-system);
-  color: var(--color-text);
-  font-style: italic;
-  border: 1px solid var(--color-system-border);
-  box-shadow: 0 0 8px var(--color-system-glow);
-}
-
-.message.isError {
-  background: var(--color-error);
-  color: white;
-  font-weight: bold;
-  border: 1px solid var(--color-error-border);
-  box-shadow: 0 0 8px var(--color-error-glow);
-}
-
-.system-message {
-  color: var(--color-system-text);
-  font-style: italic;
-}
-
-.error-message {
-  color: var(--color-error-text);
-  font-weight: bold;
-}
-
-.start-game-info {
-  background: var(--color-secondary);
-  padding: 10px 20px;
-  border-radius: 5px;
-  color: var(--color-text);
-  font-size: 14px;
-  margin-left: 10px;
-  border: 1px solid var(--color-border);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.start-game-info::before {
-  content: '⏳';
-  font-size: 16px;
-}
-
-.role-name {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: var(--color-accent);
-  text-align: center;
-  margin: 1rem 0;
-  padding: 1rem;
-  background: var(--bg-tertiary); /* Або var(--color-secondary), якщо використовуєш старий колір */
-  border-radius: 8px;
-  border: 2px solid var(--color-accent);
-
-  /* ❌ ПРИБРАЛИ position: fixed, top, left, transform та z-index */
-  display: block;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.action-option {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  background: var(--color-secondary);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.action-option:hover {
-  background: var(--color-accent);
-  color: white;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px var(--color-accent-glow);
-}
-
-.action-option-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--color-avatar);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  font-size: 1.1rem;
-}
-
-.action-option-name {
-  font-weight: 500;
-}
-
-.kick-button {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1.2rem;
-  padding: 8px;
-  margin-left: auto; /* Притискає кнопку до правого краю картки */
-  transition: transform 0.2s ease;
-  opacity: 0.7;
-}
-
-.kick-button:hover {
-  transform: scale(1.2);
-  opacity: 1;
-}
-
-/* Робимо так, щоб текст не наїжджав на кнопку */
-.player-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0; 
-  overflow: hidden;
-}
-
-.player-name {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* =========================================
+   АДАПТИВНАЯ ВЕРСТКА
+   ========================================= */
+@media (max-width: 1000px) {
+  .content-grid { 
+    grid-template-columns: 1fr; 
+  }
+  .hero-dossier { 
+    flex-direction: column; 
+    align-items: center; 
+    text-align: center; 
+  }
+  .typewriter-chat { 
+    min-height: 400px; 
+    transform: none; 
+    margin-top: 20px; 
+  }
+  .file-content { 
+    flex-direction: column; 
+    align-items: center; 
+    text-align: center; 
+  }
+  .file-actions { 
+    flex-direction: column; 
+  }
+  .btn-newspaper-control {
+    width: 100%;
+  }
 }
 </style>
