@@ -141,8 +141,9 @@
               </template>
             </div>
 
-            <div class="chat-input">
+            <div class="chat-input" @click="focusChatInput">
               <input
+                ref="chatInput"
                 v-if="activeTab === 'general' && gamePhase === 'night' && isGameStarted"
                 type="text"
                 placeholder="Місто заснуло... Наказувати заборонено."
@@ -150,6 +151,7 @@
                 class="input disabled-input"
               />
               <input
+                ref="chatInput"
                 v-else
                 type="text"
                 v-model="newMessage"
@@ -401,6 +403,13 @@ const mafiaMessages = ref([])
 const activeTab = ref('general')
 const isMafia = computed(() => ['mafia', 'mafia_don'].includes(myRole.value))
 const hasCompletedNightAction = ref(false)
+const chatInput = ref(null)
+
+const focusChatInput = () => {
+  if (chatInput.value && !chatInput.value.disabled) {
+    chatInput.value.focus()
+  }
+}
 
 const isAnyModalOpen = computed(() => {
   return showRoleModal.value || selectedPlayerForModal.value || showVoteModal.value || showNightActionModal.value
@@ -1486,6 +1495,14 @@ onUnmounted(() => {
   gap: 15px;
   max-height: 420px;
   background: transparent;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.chat-messages::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .msg { 
@@ -1553,6 +1570,7 @@ onUnmounted(() => {
   border-top: 2px dashed var(--ink-color); 
   display: flex; 
   background: rgba(0,0,0,0.02); 
+  cursor: text;
 }
 
 .chat-input input {
@@ -1565,6 +1583,25 @@ onUnmounted(() => {
   font-size: 1rem; 
   color: var(--ink-color); 
   padding: 5px;
+  caret-color: var(--accent-color) !important;
+  cursor: text;
+  user-select: text;
+  -webkit-text-fill-color: var(--ink-color);
+}
+
+.chat-input input:focus {
+  outline: 2px solid rgba(229, 53, 53, 0.7);
+  outline-offset: 2px;
+  caret-color: var(--accent-color) !important;
+  box-shadow: inset 0 -2px 0 rgba(255, 255, 255, 0.25);
+}
+
+.chat-input input::selection {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.chat-input input::-moz-focus-inner {
+  border: 0;
 }
 
 .chat-input button {
