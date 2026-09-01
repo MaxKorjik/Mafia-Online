@@ -1,6 +1,6 @@
 <template>
   <button class="theme-toggle-btn" @click="toggleTheme">
-    {{ isDark ? '☀️ Денний випуск' : '🌙 Нічний випуск' }}
+    {{ isDark ? 'Денний випуск' : 'Нічний випуск' }}
   </button>
 </template>
 

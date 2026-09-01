@@ -63,3 +63,49 @@ body::-webkit-scrollbar {
     padding: 20px 15px;
   }
 }
+
+/* =========================================
+   КАСТОМИЗАЦИЯ СТОРОННИХ ТОСТОВ (VUE-TOASTIFICATION)
+   ========================================= */
+
+/* Контейнер и сама карточка */
+.Vue-Toastification__toast {
+  background-color: var(--paper-color) !important;
+  border: 1px solid var(--ink-color) !important;
+  color: var(--ink-color) !important;
+  font-family: var(--font-text) !important;
+  border-radius: 0 !important; /* Газетные острые углы */
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.6) !important;
+  padding: 12px 20px !important;
+}
+
+/* Сообщение об успехе (Success) */
+.Vue-Toastification__toast--success {
+  border-color: #2ecc71 !important;
+  color: #2ecc71 !important;
+}
+
+/* Сообщение об ошибке (Error) */
+.Vue-Toastification__toast--error {
+  border-color: #e74c3c !important;
+  color: #e74c3c !important;
+}
+
+/* Иконки встроенных тостов (делаем в цвет текста или скрываем) */
+.Vue-Toastification__icon {
+  margin-right: 10px !important;
+}
+
+.Vue-Toastification__toast--success .Vue-Toastification__icon {
+  color: #2ecc71 !important;
+}
+
+.Vue-Toastification__toast--error .Vue-Toastification__icon {
+  color: #e74c3c !important;
+}
+
+/* Кнопка закрытия (крестик) */
+.Vue-Toastification__close-button {
+  color: var(--ink-color) !important;
+  opacity: 0.7 !important;
+}

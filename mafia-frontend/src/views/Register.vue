@@ -56,7 +56,7 @@
         </div>
 
         <div v-if="error" class="error-message-vintage">
-          🚨 УВАГА: {{ error }}
+          УВАГА: {{ error }}
         </div>
 
         <button type="submit" class="btn-vintage-primary" :disabled="loading">

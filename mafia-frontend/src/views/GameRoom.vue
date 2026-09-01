@@ -12,7 +12,7 @@
             Гравців: {{ players.length }}/{{ room.max_players_number }}
           </div>
           <div class="phase-badge" :class="{ 'night-phase-pulse': gamePhase === 'night' }">
-            Фаза: {{ gamePhase === 'day' ? 'День ☀️' : gamePhase === 'night' ? 'Ніч 🌙' : 'Очікування ⏳' }}
+            Фаза: {{ gamePhase === 'day' ? 'День' : gamePhase === 'night' ? 'Ніч' : 'Очікування' }}
             <span v-if="currentRound > 0" class="round-num"> | Раунд {{ currentRound }}</span>
           </div>
         </div>
@@ -73,8 +73,29 @@
               
               <!-- Кнопки управления и статусы поверх полароида -->
               <div class="polaroid-badges">
-                <span v-if="player.id == room.owner || player.is_owner" class="badge-owner-icon" title="Власник">👑</span>
-                <span v-if="player.is_ready && !isGameStarted" class="badge-ready-icon" title="Готовий">✔️</span>
+                <span v-if="player.id == room.owner || player.is_owner" class="badge-owner-icon" title="Власник">
+                  <svg 
+                  class="icon owner" 
+                  viewBox="0 0 24 24" 
+                  width="16" height="16" 
+                  stroke="currentColor" 
+                  stroke-width="2" 
+                  fill="none">
+                  <path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-3-7z"/>
+                </svg>
+                </span>
+                <span v-if="player.is_ready && !isGameStarted" class="badge-ready-icon" title="Готовий">
+                  <svg 
+                    class="icon ready" 
+                    viewBox="0 0 24 24" 
+                    width="16" 
+                    height="16" 
+                    stroke="currentColor" 
+                    stroke-width="2" 
+                    fill="none">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </span>
               </div>
 
               <button 
@@ -83,7 +104,10 @@
                 class="kick-button-polaroid" 
                 title="Вигнати гравця"
               >
-                ❌
+                <svg class="kick-icon" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
               </button>
             </div>
           </div>
@@ -106,7 +130,7 @@
                 :class="{ 'active': activeTab === 'mafia', 'pulse-animation': gamePhase === 'night' }"
                 @click="setTab('mafia')"
               >
-                Шифровка 🕵️‍♂️
+                Шифровка
               </div>
             </div>
             
@@ -173,7 +197,7 @@
       <!-- ПАНЕЛЬ УПРАВЛЕНИЯ -->
       <footer class="game-controls-panel">
         <button @click="leaveRoom" class="btn-newspaper-control danger">
-          🚪 Вийти з кімнати
+          Вийти з кімнати
         </button>
 
         <!-- Кнопка ночного действия -->
@@ -182,7 +206,7 @@
           @click="showNightActionModal = true"
           class="btn-newspaper-control night-action"
         >
-          🌃 Відкрити нічні дії
+          Відкрити нічні дії
         </button>
 
         <!-- Кнопка голосования (днем) -->
@@ -191,7 +215,7 @@
           @click="showVoteModal = true"
           class="btn-newspaper-control vote-action"
         >
-          ⚖️ Голосувати
+          Голосувати
         </button>
 
         <!-- Кнопка готовности с механикой удержания -->
@@ -208,7 +232,7 @@
         >
           <div v-if="!isReady" class="hold-progress" :style="{ width: progress + '%' }"></div>
           <span class="button-text">
-            {{ isReady ? '✔️ Готовий (Натисніть для скасування)' : '⏳ Затисніть для готовності' }}
+            {{ isReady ? 'Готовий' : 'Затисніть для готовності' }}
           </span>
         </button>
 
@@ -218,7 +242,7 @@
           @click="startGame" 
           class="btn-newspaper-control start-game"
         >
-          🏁 Почати гру
+          Почати гру
         </button>
         <div v-else-if="isOwner && !isGameStarted" class="start-game-waiting">
           <template v-if="players.length < room.min_players_number">
@@ -243,11 +267,11 @@
         <div class="file-photo-placeholder role-photo"></div>
         <div class="file-details">
           <h4>Ваша роль: <span class="role-highlight">{{ 
-            myRole === 'mafia' ? 'Мафія 🔫' : 
-            myRole === 'mafia_don' ? 'Дон Мафії 🕶️' : 
-            myRole === 'doctor' ? 'Лікар 🩺' : 
-            myRole === 'detective' ? 'Комісар 🔎' : 
-            'Мирний житель 👨‍🌾' 
+            myRole === 'mafia' ? 'Мафія' : 
+            myRole === 'mafia_don' ? 'Дон Мафії' : 
+            myRole === 'doctor' ? 'Лікар' : 
+            myRole === 'detective' ? 'Комісар' : 
+            'Мирний житель'
           }}</span></h4>
           <p>Дотримуйтесь таємниці слідства. Не розголошуйте свої документи стороннім особам.</p>
           
@@ -255,7 +279,7 @@
             <h5>Ваші спільники:</h5>
             <ul>
               <li v-for="mafia in otherMafia" :key="mafia.id">
-                🕵️‍♂️ {{ mafia.name || mafia.username }} (ID: {{ mafia.id }})
+                {{ mafia.name || mafia.username }} (ID: {{ mafia.id }})
               </li>
             </ul>
           </div>
@@ -317,7 +341,7 @@
         >
           <div class="row-avatar">#{{ player.id }}</div>
           <div class="row-name">{{ player.name || player.username }}</div>
-          <div class="row-action-indicator">⚖️ Проголосувати</div>
+          <div class="row-action-indicator">Проголосувати</div>
         </div>
       </div>
       <div class="file-actions">
@@ -345,7 +369,7 @@
         >
           <div class="row-avatar">#{{ player.id }}</div>
           <div class="row-name">{{ player.name }}</div>
-          <div class="row-action-indicator night">🌃 Виконати дію</div>
+          <div class="row-action-indicator night">Виконати дію</div>
         </div>
       </div>
       <div class="file-actions">
@@ -363,9 +387,8 @@
         :key="notif.id" 
         class="toast" 
         :class="notif.type"
-      >
-        {{ notif.message }}
-      </div>
+        v-html="notif.message"
+      ></div>
     </transition-group>
   </div>
 </template>
@@ -752,20 +775,23 @@ const handleWebSocketMessage = (event) => {
         router.push('/rooms');
         break;
 
-      case 'roles_reveal':
-        let revealMessage = '🕵️‍♂️ СКЛАД КОМАНД:\n'
+      case 'roles_reveal': {
+        let revealMessage = '<b>СКЛАД КОМАНД:</b><br>'
+        
         data.players.forEach(p => {
-          let roleEmoji = '👨‍🌾 Мирний'
-          if (p.role === 'mafia') roleEmoji = '🔫 Мафія'
-          if (p.role === 'mafia_don') roleEmoji = '🔫 Мафія Дон'
-          if (p.role === 'doctor') roleEmoji = '🩺 Лікар'
-          if (p.role === 'detective') roleEmoji = '🔎 Комісар'
+          let roleName = 'Мирний'
+          if (p.role === 'mafia') roleName = 'Мафія'
+          if (p.role === 'mafia_don') roleName = 'Мафія Дон'
+          if (p.role === 'doctor') roleName = 'Лікар'
+          if (p.role === 'detective') roleName = 'Комісар'
           
-          const status = p.is_alive ? '❤️ Живий' : '💀 Вбитий'
-          revealMessage += `• ${p.name}: ${roleEmoji} (${status})\n`
+          const status = p.is_alive ? 'Живий' : 'Вбитий'
+          revealMessage += `• <b>${p.name}</b>: ${roleName} (${status})<br>`
         })
+        
         showNotification(revealMessage, 'info')
         break;
+      }
 
       case 'player_saved':
         showNotification(data.message, 'success')
@@ -784,7 +810,7 @@ const handleWebSocketMessage = (event) => {
         break;
         
       case 'investigation_result':
-        const roleMsg = data.is_mafia ? 'МАФІЯ 🔫' : 'Мирний 👨‍🌾'
+        const roleMsg = data.is_mafia ? 'МАФІЯ' : 'Мирний'
         showNotification(`Результат перевірки: ${data.target} — ${roleMsg}`, 'info')
         break;
         
@@ -1401,7 +1427,7 @@ onUnmounted(() => {
   position: absolute;
   top: -5px;
   right: -5px;
-  background: var(--accent-color);
+  background: var(--paper-color);
   border: 1px solid var(--ink-color);
   color: #fff;
   border-radius: 50%;
@@ -2005,14 +2031,15 @@ onUnmounted(() => {
    ========================================= */
 .notifications-container {
   position: fixed;
-  top: 80px;
-  right: 20px;
+  bottom: 220px; /* Вместо top */
+  right: 70px;
   z-index: 9999;
   display: flex;
   flex-direction: column;
   gap: 12px;
   pointer-events: none;
 }
+
 
 .toast {
   padding: 15px 25px;
@@ -2027,22 +2054,33 @@ onUnmounted(() => {
   line-height: 1.4;
 }
 
+/* Убийство / Ошибка */
+.toast.error,
+.toast.danger {
+  border-color: rgb(197, 6, 6);
+  background: var(--paper-color);
+  color: #ff6b6b;
+}
+
+/* Спасение / Успех */
 .toast.success {
   border-color: #2ecc71;
-  background: rgba(46, 204, 113, 0.1);
-  color: #27ae60;
+  background: var(--paper-color);
+  color: #2ecc71;
 }
 
-.toast.error {
-  border-color: var(--accent-color);
-  background: rgba(107, 33, 33, 0.1);
-  color: var(--accent-color);
-}
-
+/* Голосование / Предупреждения (добавить) */
 .toast.warning {
-  border-color: #f1c40f;
-  background: rgba(241, 196, 15, 0.1);
-  color: #d35400;
+  border-color: #f39c12;
+  background: var(--paper-color);
+  color: #f39c12;
+}
+
+/* Проверка шерифа / Информация (добавить) */
+.toast.info {
+  border-color: var(--ink-color);
+  background: var(--paper-color);
+  color: var(--ink-color);
 }
 
 /* Анимация тостов */

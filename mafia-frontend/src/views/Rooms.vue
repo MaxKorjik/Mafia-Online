@@ -4,7 +4,7 @@
     <div class="rooms-page-header">
       <h2 class="archive-title">АКТИВНІ СИНДИКАТИ ТА КРИМІНАЛЬНІ СПРАВИ</h2>
       <button @click="showCreateRoomModal = true" class="btn-newspaper create-room-btn">
-        📂 Відкрити нове провадження
+        Відкрити нове провадження
       </button>
     </div>
 
@@ -25,13 +25,13 @@
           
           <div class="dossier-body">
             <div class="dossier-meta">
-              <p class="meta-item">📍 <strong>Умова старту:</strong> мінімум {{ room.min_players_number }} оперативників для облави</p>
+              <p class="meta-item"><strong>Умова старту:</strong> мінімум {{ room.min_players_number }} оперативників для облави</p>
               
               <div v-if="room.is_private" class="status-stamp stamp-private">
-                🔒 СЕКРЕТНИЙ АРХІВ
+                СЕКРЕТНИЙ АРХІВ
               </div>
               <div v-else class="status-stamp stamp-open">
-                🚨 ВІДКРИТА ОБЛАВА
+                ВІДКРИТА ОБЛАВА
               </div>
             </div>
             
@@ -152,7 +152,7 @@
           </div>
 
           <div v-if="newRoom.is_private" class="form-group-vintage encryption-field">
-            <label for="password">🔒 Секретний шифр доступу</label>
+            <label for="password">Секретний шифр доступу</label>
             <input
               type="password"
               id="password"

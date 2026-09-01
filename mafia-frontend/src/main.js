@@ -10,7 +10,7 @@ import './assets/styles/theme.css'
 const app = createApp(App)
 
 const toastOptions = {
-  position: "top-right",
+  position: "top-center",
   timeout: 5000,
   closeOnClick: true,
   pauseOnFocusLoss: true,
