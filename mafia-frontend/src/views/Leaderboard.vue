@@ -6,9 +6,11 @@
       <button 
         v-for="filter in filters" 
         :key="filter.value"
+        type="button"
         @click="currentFilter = filter.value"
         class="button"
         :class="{ active: currentFilter === filter.value }"
+        :aria-pressed="currentFilter === filter.value"
       >
         {{ filter.label }}
       </button>
@@ -20,7 +22,7 @@
         <div class="player">Гравець</div>
         <div class="stats">
           <div class="stat">Всього ігор</div>
-          <div class="stat">Як вижив</div>
+          <div class="stat">Як мирний</div>
           <div class="stat">Як мафія</div>
         </div>
       </div>
@@ -59,7 +61,7 @@ const currentFilter = ref('matches')
 
 const filters = [
   { label: 'Всього ігор', value: 'matches' },
-  { label: 'Як вижив', value: 'survivor_matches' },
+  { label: 'Як мирний', value: 'survivor_matches' },
   { label: 'Як мафія', value: 'mafia_matches' }
 ]
 
@@ -83,6 +85,16 @@ onMounted(fetchLeaderboard)
 .leaderboard-container {
   margin: 0;
   padding: 2rem;
+  color: var(--ink-color);
+  font-family: var(--font-text);
+}
+
+.leaderboard-container h1 {
+  font-size: 2.5rem;
+  margin-bottom: 1.5rem;
+  color: var(--accent-color);
+  text-align: center;
+  letter-spacing: 0.02em;
 }
 
 .leaderboard-filters {
@@ -90,15 +102,35 @@ onMounted(fetchLeaderboard)
   justify-content: center;
   gap: 1rem;
   margin-bottom: 2rem;
+  flex-wrap: wrap;
 }
 
-.button.active {
-  background-color: var(--accent-secondary);
+button.button {
+  background: transparent;
+  border: 1px solid var(--ink-color);
+  color: var(--ink-color);
+  padding: 0.85rem 1.4rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 140px;
+}
+
+button.button:hover {
+  background: rgba(107, 33, 33, 0.08);
+}
+
+button.button.active {
+  background-color: var(--accent-color);
+  border-color: var(--accent-color);
+  color: var(--paper-color);
 }
 
 .leaderboard-table {
   padding: 0;
   overflow: hidden;
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
 }
 
 .table-header {

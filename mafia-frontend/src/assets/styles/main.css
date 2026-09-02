@@ -1,0 +1,111 @@
+/* Подключаем палитру и базу */
+@import './theme.css';
+@import './base.css';
+
+html, body {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* =========================================
+   ГЛОБАЛЬНЫЙ КАРКАС ГАЗЕТЫ
+   ========================================= */
+.newspaper-wrapper {
+  position: relative;
+  max-width: 1200px;
+  width: 100%;
+  z-index: 1;
+  filter: drop-shadow(0 25px 35px rgba(0, 0, 0, 0.8));
+}
+
+/* Тени и нижние листы бумаги */
+.newspaper-wrapper::before,
+.newspaper-wrapper::after {
+  content: '';
+  position: absolute;
+  background-color: var(--paper-shadow);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  transition: background-color 0.4s ease;
+}
+
+.newspaper-wrapper::before {
+  top: 5px; left: -8px; right: 6px; bottom: -5px;
+  transform: rotate(-0.7deg);
+  z-index: -1;
+}
+
+.newspaper-wrapper::after {
+  top: 10px; left: 5px; right: -10px; bottom: -3px;
+  transform: rotate(1.1deg);
+  z-index: -2;
+}
+
+/* Главный лист бумаги */
+.newspaper-main {
+  background-color: var(--paper-color);
+  padding: 35px 45px;
+  position: relative;
+  z-index: 2;
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.2);
+  background-image: linear-gradient(rgba(0, 0, 0, 0.015) 1px, transparent 1px);
+  background-size: 100% 4px;
+  transition: background-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+@media (max-width: 680px) {
+  .newspaper-main {
+    padding: 20px 15px;
+  }
+}
+
+/* =========================================
+   КАСТОМИЗАЦИЯ СТОРОННИХ ТОСТОВ (VUE-TOASTIFICATION)
+   ========================================= */
+
+/* Контейнер и сама карточка */
+.Vue-Toastification__toast {
+  background-color: var(--paper-color) !important;
+  border: 1px solid var(--ink-color) !important;
+  color: var(--ink-color) !important;
+  font-family: var(--font-text) !important;
+  border-radius: 0 !important; /* Газетные острые углы */
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.6) !important;
+  padding: 12px 20px !important;
+}
+
+/* Сообщение об успехе (Success) */
+.Vue-Toastification__toast--success {
+  border-color: #2ecc71 !important;
+  color: #2ecc71 !important;
+}
+
+/* Сообщение об ошибке (Error) */
+.Vue-Toastification__toast--error {
+  border-color: #e74c3c !important;
+  color: #e74c3c !important;
+}
+
+/* Иконки встроенных тостов (делаем в цвет текста или скрываем) */
+.Vue-Toastification__icon {
+  margin-right: 10px !important;
+}
+
+.Vue-Toastification__toast--success .Vue-Toastification__icon {
+  color: #2ecc71 !important;
+}
+
+.Vue-Toastification__toast--error .Vue-Toastification__icon {
+  color: #e74c3c !important;
+}
+
+/* Кнопка закрытия (крестик) */
+.Vue-Toastification__close-button {
+  color: var(--ink-color) !important;
+  opacity: 0.7 !important;
+}

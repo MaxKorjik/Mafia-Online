@@ -12,7 +12,8 @@ __pycache__/
 *.ini
 *.cfg
 mafia.db
-
+.env.development
+.env.production
 # Distribution / packaging
 .Python
 build/

@@ -1,0 +1,30 @@
+/* =========================================
+   СБРОС И БАЗОВЫЕ НАСТРОЙКИ
+   ========================================= */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--wood-dark);
+  background-image: 
+      radial-gradient(circle at center, transparent 10%, rgba(0, 0, 0, 0.9) 95%),
+      repeating-linear-gradient(90deg, var(--wood-dark) 0px, var(--wood-dark) 15px, var(--wood-light) 15px, var(--wood-light) 30px);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 40px 20px;
+  font-family: var(--font-ui);
+  color: var(--ink-color);
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}

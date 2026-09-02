@@ -29,7 +29,6 @@ class Player:
             "is_ready": self.is_ready,
             "is_alive": self.is_alive,
             "role": self.role,
-            "is_owner": False  # Буде встановлено в GameRoom
         }
     
     def reset(self):
@@ -54,7 +53,7 @@ class GameRoom:
         self.is_game_over = False
         self.is_private = is_private
         self.night_actions = {
-            "mafia": [],
+            "mafia": {},
             "doctor": None,
             "detective": None
         }
@@ -72,9 +71,9 @@ class GameRoom:
     def remove_player(self, player_id):
         if player_id in self.players:
             del self.players[player_id]
-            if self.owner == player_id and self.players:
-                self.owner = next(iter(self.players))
-                print(f"New owner is {self.owner}")
+            # if self.owner == player_id and self.players:
+            #     self.owner = next(iter(self.players))
+            #     print(f"New owner is {self.owner}")
             print(f"Removed player {player_id} from room {self.id}")
             return True
         return False
@@ -119,8 +118,8 @@ class GameRoom:
     
     def check_victory(self):
         if not self.is_game_over:
-            mafia_count = sum(1 for p in self.players.values() if p.is_alive and p.role == "mafia")
-            civilians_count = sum(1 for p in self.players.values() if p.is_alive and p.role != "mafia")
+            mafia_count = sum(1 for p in self.players.values() if p.is_alive and p.role in ["mafia", "mafia_don"])
+            civilians_count = sum(1 for p in self.players.values() if p.is_alive and p.role not in ["mafia", "mafia_don"])
             
             print(f"Victory check: mafia={mafia_count}, civilians={civilians_count}")
             
@@ -154,7 +153,7 @@ class GameRoom:
         self.round = 1
         self.is_game_over = False
         self.night_actions = {
-            "mafia": [],
+            "mafia": {},
             "doctor": None,
             "detective": None
         }
@@ -173,7 +172,7 @@ class GameRoom:
 
     def assign_roles(self):
         print(f"Assigning roles in room {self.id}...")
-        roles = ["mafia", "mafia", "doctor", "detective", "civilian", "civilian"]
+        roles = ["mafia", "mafia_don", "doctor", "detective", "civilian", "civilian"]
         random.shuffle(roles)
         
         players_list = list(self.players.values())

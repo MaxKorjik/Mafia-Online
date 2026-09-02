@@ -115,20 +115,53 @@ onMounted(() => {
 .profile {
   margin: 0;
   padding: 2rem;
+  color: var(--ink-color);
+  font-family: var(--font-text);
 }
 
 .profile-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 1rem;
   margin-bottom: 2rem;
+  padding: 1.5rem 2rem;
+  background: var(--card-bg);
+  border: 1px solid var(--stamp-border);
+  border-radius: 0;
+  box-shadow: 8px 10px 18px rgba(0, 0, 0, 0.08);
+}
+
+.profile-header h1 {
+  margin: 0;
+  font-size: 2.4rem;
+  color: var(--accent-color);
+  letter-spacing: 0.02em;
+}
+
+.profile-header .btn-danger {
+  background-color: var(--error-color);
+  color: white;
+  padding: 0.95rem 1.6rem;
+  border: 2px solid var(--error-color-dark);
+  border-radius: 0;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  box-shadow: 0 0 0 3px rgba(229, 57, 53, 0.12);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.profile-header .btn-danger:hover {
+  transform: translateY(-1px);
+  background-color: var(--error-color-dark);
 }
 
 .profile-content {
-  background-color: var(--bg-secondary);
-  border-radius: 8px;
+  background-color: var(--paper-color);
+  border: 1px solid rgba(43, 43, 43, 0.14);
+  border-radius: 0;
   padding: 2rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 12px 14px 28px rgba(0, 0, 0, 0.08);
 }
 
 .profile-info {
@@ -137,20 +170,29 @@ onMounted(() => {
 
 .info-group {
   display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
   margin-bottom: 1rem;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid var(--border-color);
+  padding: 1rem;
+  background: var(--card-bg);
+  border-radius: 0;
+  border: 1px solid var(--stamp-border);
 }
 
 .info-group label {
-  font-weight: bold;
-  width: 200px;
+  font-weight: 700;
+  width: 220px;
   color: var(--text-secondary);
+}
+
+.info-group span {
+  flex: 1;
+  color: var(--ink-color);
 }
 
 .stats-section h2 {
   margin-bottom: 1.5rem;
-  color: var(--text-primary);
+  color: var(--accent-color);
 }
 
 .stats-grid {
@@ -160,64 +202,60 @@ onMounted(() => {
 }
 
 .stat-card {
-  background-color: var(--bg-primary);
-  padding: 1.5rem;
-  border-radius: 8px;
+  background-color: var(--card-bg);
+  padding: 1.6rem;
+  border-radius: 0;
   text-align: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--stamp-border);
 }
 
 .stat-card h3 {
   font-size: 1rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
   color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .stat-value {
-  font-size: 2rem;
-  font-weight: bold;
-  color: var(--primary-color);
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: var(--accent-primary);
   margin: 0;
 }
 
-.loading {
-  text-align: center;
-  padding: 2rem;
-  color: var(--text-secondary);
-}
-
+.loading,
 .error {
   text-align: center;
   padding: 2rem;
+  border-radius: 0;
+  background: var(--card-bg);
+  border: 1px solid var(--stamp-border);
+}
+
+.error {
   color: var(--error-color);
 }
 
-.btn-danger {
-  background-color: var(--error-color);
-}
-
-.btn-danger:hover {
-  background-color: var(--error-color-dark);
-}
-
-@media (max-width: 600px) {
+@media (max-width: 820px) {
   .profile {
     padding: 1rem;
   }
 
   .profile-header {
     flex-direction: column;
-    gap: 1rem;
+    align-items: stretch;
     text-align: center;
   }
 
   .info-group {
     flex-direction: column;
+    align-items: flex-start;
   }
 
   .info-group label {
     width: 100%;
-    margin-bottom: 0.5rem;
   }
 }
 </style> 
