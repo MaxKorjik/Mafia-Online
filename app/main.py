@@ -40,37 +40,44 @@ async def websocket_test(websocket: WebSocket):
         print(f"WebSocket test error: {e}")
         await websocket.close()
 
-@app.get("/")
-async def root():
-    return {"message": "Welcome to Mafia Game API"}
-
 
 @app.get("/api/rooms", response_model=list[schemas.RoomResponse])
 async def get_active_rooms(db: Session = Depends(get_db)):
     rooms = db.query(models.Room).filter(models.Room.is_active == True).all()
+
+    for room in rooms:
+        if room.id in active_rooms:
+            room.players_number = active_rooms[room.id].players_number
+
     return rooms
 
 
 @app.get("/api/rooms/{room_id}", response_model=schemas.RoomResponse)
-async def get_room(room_id: int, db: Session = Depends(get_db)):
+async def get_room(room_id: int, password: Optional[str] = None, db: Session = Depends(get_db)):
     room = db.query(models.Room).filter(models.Room.id == room_id).first()
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
+    print(
+        f"DEBUG ROOM PASS: '{room.password}' (type {type(room.password)}) | INPUT PASS: '{password}' (type {type(password)})"
+    )
+    if room.is_private and room.password != password:
+        raise HTTPException(
+            status_code=403, detail="Невірний пароль для доступу до кімнати"
+        )
+        
     return room
 
 
 @app.post("/api/rooms", response_model=schemas.RoomResponse)
 async def create_room(
         room: schemas.RoomCreate,
-        password: Optional[str] = Query(None),
         current_user: Optional[models.User] = Depends(get_current_user),
         db: Session = Depends(get_db)
 ):
     try:
-        print(f"Creating room with data: {room.dict()}")
         print(f"Current user: {current_user}")
         
-        if room.is_private and not password: 
+        if room.is_private and not room.password: 
             raise HTTPException(status_code=400, detail="Password is required for private rooms")
         
         if current_user is None:
@@ -83,7 +90,7 @@ async def create_room(
 
         db_room = models.Room(
             name=room.name,
-            password=password,
+            password=room.password,
             owner=owner_id,
             min_players_number=room.min_players_number,
             max_players_number=room.max_players_number,

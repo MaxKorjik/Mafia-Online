@@ -628,15 +628,28 @@ const canVote = computed(() => {
 
 const fetchRoom = async () => {
   try {
-    const response = await api.get(`/api/rooms/${route.params.id}`)
-    room.value = response.data
-    roomOwner.value = response.data.owner
-    await fetchPlayers()
+    const roomId = route.params.id;
+    const savedPassword = sessionStorage.getItem(`room_pass_${roomId}`);
+
+    const response = await api.get(`/api/rooms/${roomId}`, {
+      params: savedPassword ? { password: savedPassword } : {}
+    });
+
+    room.value = response.data;
+    roomOwner.value = response.data.owner;
+    await fetchPlayers();
   } catch (error) {
-    console.error('Помилка отримання інформації про кімнату:', error)
-    router.push('/rooms')
+    console.error('Помилка отримання інформації про кімнату:', error);
+    
+    if (error.response?.status === 403) {
+      alert('Необхідно вказати пароль для доступу');
+      // Удаляем невалидный пароль из хранилища
+      sessionStorage.removeItem(`room_pass_${route.params.id}`);
+    }
+    
+    router.push('/rooms');
   }
-}
+};
 
 const fetchPlayers = async () => {
   try {

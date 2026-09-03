@@ -58,7 +58,13 @@ class GameRoom:
             "detective": None
         }
         self.votes = {}
+        
         print(f"Created game room {id} with name {name}")
+        
+    @property
+    def players_number(self) -> int:
+        return len(self.players)
+        
 
     def add_player(self, player):
         if len(self.players) >= self.max_players:

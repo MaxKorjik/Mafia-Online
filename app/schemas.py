@@ -62,7 +62,7 @@ class RoomBase(BaseModel):
         return v
 
 class RoomCreate(RoomBase):
-    pass
+    password: Optional[str] = None
 
 class RoomResponse(RoomBase):
     id: int

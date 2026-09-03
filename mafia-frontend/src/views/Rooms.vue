@@ -115,7 +115,7 @@
 
           <div class="form-row-vintage">
             <div class="form-group-vintage">
-              <label for="minPlayers">Мін. детективів (4-12)</label>
+              <label for="minPlayers">Мін. детективів (6-12)</label>
               <input
                 type="number"
                 id="minPlayers"
@@ -128,7 +128,7 @@
             </div>
 
             <div class="form-group-vintage">
-              <label for="maxPlayers">Макс. детективів (4-12)</label>
+              <label for="maxPlayers">Макс. детективів (6-12)</label>
               <input
                 type="number"
                 id="maxPlayers"
@@ -178,6 +178,7 @@
 </template>
 
 <script setup>
+import axios from 'axios'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/services/api'
@@ -242,12 +243,35 @@ const createRoom = async () => {
 }
 
 const joinRoom = async (room) => {
-  if (room.is_private) {
-    const password = prompt('Введіть пароль для кімнати:')
-    if (!password) return
+  let password = null;
+  const isPrivate = Boolean(room.is_private) && room.is_private !== 'false';
+
+  if (isPrivate) {
+    password = prompt('Введіть пароль для кімнати:');
+    if (!password) return;
   }
-  router.push(`/room/${room.id}`)
-}
+
+  try {
+    await axios.get(`${import.meta.env.VITE_API_URL}/api/rooms/${room.id}`, {
+      params: password ? { password } : {}
+    });
+
+    // Сохраняем пароль в sessionStorage для этой конкретной комнаты
+    if (password) {
+      sessionStorage.setItem(`room_pass_${room.id}`, password);
+    }
+
+    router.push(`/room/${room.id}`);
+
+  } catch (error) {
+    if (error.response && error.response.status === 403) {
+      alert('Невірний пароль для доступу до кімнати!');
+    } else {
+      console.error(error);
+      alert('Помилка входу в кімнату');
+    }
+  }
+};
 
 onMounted(fetchRooms)
 </script>
